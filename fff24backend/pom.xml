@@ -44,9 +44,9 @@
 		<dependency>
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>
-			<scope>runtime</scope>
-			<version>42.1.4</version>
+			<version>42.6.0</version> <!-- oder eine aktuelle Version -->
 		</dependency>
+
 
 		<!-- AWS Java SDK for SQS -->
 		<dependency>
