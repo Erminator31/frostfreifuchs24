@@ -71,13 +71,14 @@ public class PostgresDBProductManagement implements ProductManager {
     public void createProductTable() throws Exception {
         Connection connection = null;
         PreparedStatement pstmt = null;
-        String createTableSQL = "CREATE TABLE IF NOT EXISTS events (" +
-                "product_id SERIAL PRIMARY KEY, " +
-                "product_name VARCHAR(255) NOT NULL, " +
-                "product_type VARCHAR(100) NOT NULL, ";
+        // CREATE TABLE Statement korrigiert und auf products angepasst
+        String createTableSQL = "CREATE TABLE IF NOT EXISTS products ("
+                + "productid SERIAL PRIMARY KEY, "
+                + "productname VARCHAR(255) NOT NULL, "
+                + "producttype VARCHAR(100) NOT NULL"
+                + ");";
 
         try {
-
             connection = basicDataSource.getConnection();
             pstmt = connection.prepareStatement(createTableSQL);
             pstmt.execute();
@@ -90,6 +91,7 @@ public class PostgresDBProductManagement implements ProductManager {
                 connection.close();
         }
     }
+
 
     @Override
     public Product addProduct(String productName, String productType) {
@@ -160,9 +162,9 @@ public class PostgresDBProductManagement implements ProductManager {
              ResultSet rs = stmt.executeQuery(query)) {
             while (rs.next()) {
                 products.add(new Product(
-                        rs.getInt("productId"),       // entspricht der Spalte "productId"
-                        rs.getString("productName"),  // entspricht der Spalte "productName"
-                        rs.getString("productType")   // entspricht der Spalte "productType"
+                        rs.getInt("productid"),
+                        rs.getString("productname"),
+                        rs.getString("producttype")
                 ));
             }
         } catch (SQLException e) {
