@@ -18,7 +18,7 @@
     // Indicates that the class is a REST controller
     @RestController
     // Base path for all endpoints in this controller
-    @RequestMapping("/api/v1.0")
+    @RequestMapping("/api")
     public class MappingController {
 
         ProductManager productManager = PostgresDBProductManagement.getPostgresDBProductManagement();
@@ -38,7 +38,7 @@
         }
 
 
-        @GetMapping("/api/create-products-table")
+        @GetMapping("/create-products-table")
         public String creatProductTable() throws Exception {
             Logger.getLogger("MappingController")
                     .log(Level.INFO, "MappingController create-product-table ");
