@@ -58,6 +58,7 @@ public class PostgresDBProductManagement implements ProductManager {
                 "product_type VARCHAR(100) NOT NULL, ";
 
         try {
+
             connection = basicDataSource.getConnection();
             pstmt = connection.prepareStatement(createTableSQL);
             pstmt.execute();
