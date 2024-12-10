@@ -38,7 +38,7 @@
         }
 
 
-        @GetMapping("/create-user-table")
+        @GetMapping("/api/create-products-table")
         public String creatProductTable() throws Exception {
             Logger.getLogger("MappingController")
                     .log(Level.INFO, "MappingController create-product-table ");
