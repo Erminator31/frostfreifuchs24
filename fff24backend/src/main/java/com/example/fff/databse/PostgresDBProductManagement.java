@@ -12,9 +12,11 @@ import java.util.logging.Logger;
 
 public class PostgresDBProductManagement implements ProductManager {
     // Database connection details
-    String databaseURL = "jdbc:postgres://u3t73itv4ifknl:pc8d79bc3deea2ca2b99f04d14057aeb257bac911861af2c1c3f890ffecaa803c@c7u1tn6bvvsodf.cluster-czz5s0kz4scl.eu-west-1.rds.amazonaws.com:5432/d1t207hd56v54?sslmode=require";
+// Database connection details
+    String databaseURL = "jdbc:postgresql://c7ul1tn6bwsodf.cluster-czz5sOkz4scl.eu-west-1.rds.amazonaws.com:5432/d1t207hd56v54?sslmode=require";
     String username = "u3t73itv4ifknl";
-    String password = "pc8d79bc3deea2ca2b99f04d14057aeb257bac911861af2c1c3f890ffecaa803c";
+    String password = "pc8d79bc3deea2ca2b99f04d14057aeb257bac91186laf2c1c3f890ffecaa803c";
+
     BasicDataSource basicDataSource;
 
     // Singleton pattern for the manager implementation
