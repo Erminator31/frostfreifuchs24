@@ -69,23 +69,22 @@
             return null;
         }
 
-        @GetMapping("/api/inventory")
-        public ResponseEntity<List<Product>> getAllProducts() {
-            Logger.getLogger("MappingController").log(Level.INFO, "MappingController /users/all");
+        @GetMapping("/inventory")
+        public ResponseEntity<List<Product>> getProducts(
+                @RequestParam(value = "productName", required = false) String productName,
+                @RequestParam(value = "productType", required = false) String productType) {
+            Logger.getLogger("MappingController").log(Level.INFO, "MappingController /api/inventory");
 
-            List<Product> productsFromFile = productManager.readAllProducts();
-            List<Product> myProducts = new ArrayList<>();
+            // Produkte gefiltert aus der DB laden
+            List<Product> products = productManager.readProducts(productName, productType);
 
-            for (Product p : productsFromFile) {
-                myProducts.add(new Product(p.getProductId(), p.getProductName(), p.getProductType()));
-            }
-
-            if (myProducts.isEmpty()) {
-                // Falls keine Produkte vorhanden sind, könnte man z. B. einen 204 zurückgeben
+            if (products.isEmpty()) {
+                // Wenn keine Produkte vorhanden, 204 No Content zurückgeben
                 return ResponseEntity.noContent().build();
             }
 
-            return ResponseEntity.ok(myProducts);
+            return ResponseEntity.ok(products);
         }
+
 
     }

@@ -8,5 +8,6 @@ public interface ProductManager {
     void createProductTable() throws Exception;
 
     Product addProduct(String productName, String productType);
-    List<Product> readAllProducts();
+    List<Product> readProducts(String productName, String productType);
+
 }

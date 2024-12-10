@@ -151,29 +151,59 @@ public class PostgresDBProductManagement implements ProductManager {
         return null;
     }
     @Override
-    public List<Product> readAllProducts() {
+    public List<Product> readProducts(String productName, String productType) {
         final Logger readProductLogger = Logger.getLogger("ReadProductLogger");
-        readProductLogger.log(Level.INFO, "Start reading products");
+        readProductLogger.log(Level.INFO, "Start reading products with filters name=" + productName + " type=" + productType);
 
         List<Product> products = new ArrayList<>();
-        final String query = "SELECT * FROM products";
+
+        // Dynamische Abfrage bauen
+        StringBuilder queryBuilder = new StringBuilder("SELECT * FROM products");
+        List<Object> parameters = new ArrayList<>();
+
+        boolean hasNameFilter = productName != null && !productName.trim().isEmpty();
+        boolean hasTypeFilter = productType != null && !productType.trim().isEmpty();
+
+        if (hasNameFilter || hasTypeFilter) {
+            queryBuilder.append(" WHERE");
+        }
+        if (hasNameFilter) {
+            queryBuilder.append(" productname ILIKE ?");
+            parameters.add("%" + productName + "%");
+        }
+        if (hasTypeFilter) {
+            if (hasNameFilter) {
+                queryBuilder.append(" AND");
+            }
+            queryBuilder.append(" producttype ILIKE ?");
+            parameters.add("%" + productType + "%");
+        }
 
         try (Connection connection = basicDataSource.getConnection();
-             Statement stmt = connection.createStatement();
-             ResultSet rs = stmt.executeQuery(query)) {
-            while (rs.next()) {
-                products.add(new Product(
-                        rs.getInt("productid"),
-                        rs.getString("productname"),
-                        rs.getString("producttype")
-                ));
+             PreparedStatement stmt = connection.prepareStatement(queryBuilder.toString())) {
+
+            // Parameter setzen
+            for (int i = 0; i < parameters.size(); i++) {
+                stmt.setObject(i + 1, parameters.get(i));
             }
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    products.add(new Product(
+                            rs.getInt("productid"),
+                            rs.getString("productname"),
+                            rs.getString("producttype")
+                    ));
+                }
+            }
+
         } catch (SQLException e) {
             readProductLogger.log(Level.SEVERE, "Error reading products", e);
         }
 
         return products;
     }
+
 
 
 
