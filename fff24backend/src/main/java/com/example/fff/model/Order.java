@@ -1,7 +1,6 @@
-package model;
+package com.example.fff.model;
 
 import com.example.fff.api.OrderInterface;
-import com.example.fff.api.OrderItemInterface;
 
 import java.util.List;
 

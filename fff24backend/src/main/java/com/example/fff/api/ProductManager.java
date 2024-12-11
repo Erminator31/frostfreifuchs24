@@ -1,6 +1,6 @@
 package com.example.fff.api;
 
-import model.Product;
+import com.example.fff.model.Product;
 
 import java.sql.SQLException;
 import java.util.List;

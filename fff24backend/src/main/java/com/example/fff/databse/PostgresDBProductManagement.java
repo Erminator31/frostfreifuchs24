@@ -1,7 +1,7 @@
 package com.example.fff.databse;
 
 import com.example.fff.api.ProductManager;
-import model.Product;
+import com.example.fff.model.Product;
 import org.apache.commons.dbcp.BasicDataSource;
 
 import java.sql.*;
@@ -136,7 +136,7 @@ public class PostgresDBProductManagement implements ProductManager {
             sumStmt.close();
 
             // Prüfen, ob durch Hinzufügen der neuen Menge die Gesamtkapazität überschritten wird
-            if (currentTotalQuantity + quantity > 20000) {
+            if (currentTotalQuantity + quantity > 2000000) {
                 connection.rollback();
                 throw new Exception("Cannot add product. Adding " + quantity + " units would exceed the total warehouse capacity of 20000.");
             }

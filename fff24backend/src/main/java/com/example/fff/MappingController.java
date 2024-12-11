@@ -4,15 +4,19 @@
     import com.example.fff.api.ProductManager;
     import com.example.fff.databse.PostgresDBOrderManagement;
     import com.example.fff.databse.PostgresDBProductManagement;
-    import model.Order;
-    import model.Product;
+    import com.example.fff.model.Order;
+    import com.example.fff.model.OrderItem;
+    import com.example.fff.model.Product;
     import org.springframework.http.HttpStatus;
     import org.springframework.http.MediaType;
     import org.springframework.http.ResponseEntity;
     import org.springframework.web.bind.annotation.*;
 
+    import java.sql.Timestamp;
+    import java.time.LocalDate;
+    import java.time.LocalDateTime;
     import java.util.*;
-    import java.util.function.Predicate;
+    import java.util.concurrent.ThreadLocalRandom;
     import java.util.logging.Level;
     import java.util.logging.Logger;
 
@@ -194,21 +198,32 @@
         }
 
 
-        /**
-         * Bestell-Endpoint: Hier kann eine Bestellung angelegt werden.
-         * Der Request-Body enthält den Kundennamen und die bestellten Items.
-         */
+        // Neue Order-Klasse anpassen, damit optional ein orderDate Feld möglich ist.
         @PostMapping("/order")
-        public ResponseEntity<?> createOrder(@RequestBody Order orderRequest) {
+        public ResponseEntity<?> createOrder(@RequestBody Order orderRequest,
+                                             @RequestParam(value = "orderDate", required = false) String orderDateStr) {
             LOGGER.log(Level.INFO, "Creating order for customer: " + orderRequest.getCustomerName());
 
             try {
-                Order createdOrder = orderManager.createOrder(orderRequest.getCustomerName(), orderRequest.getItems());
+                Timestamp orderDate = null;
+                if (orderDateStr != null && !orderDateStr.trim().isEmpty()) {
+                    // Beispiel: orderDateStr im Format "2023-01-15T10:00:00"
+                    orderDate = Timestamp.valueOf(orderDateStr);
+                }
+
+                Order createdOrder;
+                if (orderDate == null) {
+                    createdOrder = orderManager.createOrder(orderRequest.getCustomerName(), orderRequest.getItems());
+                } else {
+                    createdOrder = orderManager.createOrder(orderRequest.getCustomerName(), orderRequest.getItems(), orderDate);
+                }
+
                 return ResponseEntity.ok(createdOrder);
             } catch (Exception e) {
                 return ResponseEntity.badRequest().body("Could not create order: " + e.getMessage());
             }
         }
+
 
         /**
          * Einzelne Bestellung abrufen
@@ -242,7 +257,121 @@
             }
         }
 
+        /**
+         * Generiert historische Daten zwischen Januar 2023 und November 2024.
+         * Pro Monat werden ca. 30 Bestellungen eingefügt, wobei saisonale Muster berücksichtigt werden.
+         * Hier wird nun ein individuelles Datum (innerhalb des jeweiligen Monats) für jede Bestellung gesetzt.
+         */
+        @GetMapping("/generate-history")
+        public ResponseEntity<String> generateHistoricalData() {
+            try {
+                ensureProductsExist();
+
+                LocalDate startDate = LocalDate.of(2023, 1, 1);
+                LocalDate endDate = LocalDate.of(2024, 11, 30);
+
+                int ordersPerMonth = 30;
+                String[] customerNames = {"Max Mustermann", "Maria Musterfrau", "Hans Huber", "Julia Schmidt", "Peter Pan"};
+
+                LocalDate current = startDate.withDayOfMonth(1);
+
+                while (!current.isAfter(endDate)) {
+                    int m = current.getMonthValue();
+                    double p1, p2, p3; // Wahrscheinlichkeiten für Produkt 1, 2, 3
+                    if (m == 12 || m == 1 || m == 2) {
+                        // Winter
+                        p1 = 0.4; p2 = 0.2; p3 = 0.4;
+                    } else if (m >= 3 && m <= 5) {
+                        // Frühling
+                        p1 = 0.3; p2 = 0.5; p3 = 0.2;
+                    } else if (m >= 6 && m <= 8) {
+                        // Sommer
+                        p1 = 0.1; p2 = 0.7; p3 = 0.2;
+                    } else {
+                        // Herbst (9,10,11)
+                        p1 = 0.3; p2 = 0.3; p3 = 0.4;
+                    }
+
+                    // Länge des Monats bestimmen
+                    int lengthOfMonth = current.lengthOfMonth();
+
+                    for (int i = 0; i < ordersPerMonth; i++) {
+                        String customer = customerNames[i % customerNames.length];
+
+                        // 2 OrderItems pro Bestellung
+                        List<OrderItem> items = new ArrayList<>();
+                        items.add(generateOrderItemWithSeason(p1, p2, p3));
+                        items.add(generateOrderItemWithSeason(p1, p2, p3));
+
+                        // Wir wählen ein zufälliges Datum im aktuellen Monat zwischen dem 1. und letzten Tag
+                        int randomDay = ThreadLocalRandom.current().nextInt(1, lengthOfMonth + 1);
+                        LocalDate randomDate = current.withDayOfMonth(randomDay);
+
+                        // Optional: Auch die Uhrzeit leicht variieren
+                        int randomHour = ThreadLocalRandom.current().nextInt(8, 18); // zwischen 8 und 17 Uhr
+                        int randomMinute = ThreadLocalRandom.current().nextInt(0, 60);
+
+                        LocalDateTime orderDateTime = LocalDateTime.of(randomDate.getYear(),
+                                randomDate.getMonthValue(),
+                                randomDate.getDayOfMonth(),
+                                randomHour,
+                                randomMinute);
+
+                        Timestamp orderTimestamp = Timestamp.valueOf(orderDateTime);
+
+                        // Bestellung mit spezifischem Datum erstellen
+                        orderManager.createOrder(customer, items, orderTimestamp);
+                    }
+
+                    current = current.plusMonths(1);
+                }
+
+                return ResponseEntity.ok("Historical data generated successfully.");
+
+            } catch (Exception e) {
+                e.printStackTrace();
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body("Error generating historical data: " + e.getMessage());
+            }
+        }
+
+        private OrderItem generateOrderItemWithSeason(double p1, double p2, double p3) {
+            double rnd = Math.random();
+            int productId;
+            if (rnd <= p1) {
+                productId = 1;
+            } else if (rnd <= p1 + p2) {
+                productId = 2;
+            } else {
+                productId = 3;
+            }
+
+            // Menge zwischen 5 und 20
+            int quantity = 5 + ThreadLocalRandom.current().nextInt(0, 16);
+            return new OrderItem(productId, quantity);
+        }
+
+        private void ensureProductsExist() throws Exception {
+            List<Product> existing = productManager.readProducts(null,null);
+            boolean has1 = existing.stream().anyMatch(p -> p.getProductId()==1);
+            boolean has2 = existing.stream().anyMatch(p -> p.getProductId()==2);
+            boolean has3 = existing.stream().anyMatch(p -> p.getProductId()==3);
+
+            if(!has1) {
+                productManager.addProduct("Klaus Winter", "Mit Frostschutz", 1000);
+            }
+
+            if(!has2) {
+                productManager.addProduct("Klaus Summer", "Ohne Frostschutz", 1000);
+            }
+
+            if(!has3) {
+                productManager.addProduct("Klaus Extreme", "Mit Frostschutz", 1000);
+            }
+        }
     }
+
+
 
 
 

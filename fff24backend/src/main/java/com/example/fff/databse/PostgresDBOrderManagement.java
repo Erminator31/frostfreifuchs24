@@ -3,8 +3,8 @@ package com.example.fff.databse;
 import com.example.fff.api.OrderManager;
 
 
-import model.Order;
-import model.OrderItem;
+import com.example.fff.model.Order;
+import com.example.fff.model.OrderItem;
 import org.apache.commons.dbcp.BasicDataSource;
 
 import java.sql.*;
@@ -95,6 +95,12 @@ public class PostgresDBOrderManagement implements OrderManager {
 
     @Override
     public Order createOrder(String customerName, List<OrderItem> items) throws Exception {
+        // Ruft die neue Methode mit null für das Datum auf
+        return createOrder(customerName, items, null);
+    }
+
+    @Override
+    public Order createOrder(String customerName, List<OrderItem> items, Timestamp orderDate) throws Exception {
         Connection connection = null;
         PreparedStatement orderStmt = null;
         PreparedStatement orderItemStmt = null;
@@ -105,51 +111,51 @@ public class PostgresDBOrderManagement implements OrderManager {
             connection = basicDataSource.getConnection();
             connection.setAutoCommit(false);
 
-            // 1. Neuen Order-Eintrag erzeugen
-            String insertOrderSQL = "INSERT INTO orders (customername) VALUES (?) RETURNING orderid, orderdate";
+            String insertOrderSQL;
+            if (orderDate == null) {
+                // Kein Datum angegeben, Standardwert (NOW()) verwenden
+                insertOrderSQL = "INSERT INTO orders (customername) VALUES (?) RETURNING orderid, orderdate";
+            } else {
+                // Benutzerdefiniertes Datum verwenden
+                insertOrderSQL = "INSERT INTO orders (customername, orderdate) VALUES (?, ?) RETURNING orderid, orderdate";
+            }
+
             orderStmt = connection.prepareStatement(insertOrderSQL);
             orderStmt.setString(1, customerName);
+            if (orderDate != null) {
+                orderStmt.setTimestamp(2, orderDate);
+            }
+
             rs = orderStmt.executeQuery();
 
             int newOrderId = -1;
-            String orderDate = null;
+            String returnedOrderDate = null;
             if (rs.next()) {
                 newOrderId = rs.getInt("orderid");
-                orderDate = rs.getString("orderdate");
+                returnedOrderDate = rs.getString("orderdate");
             }
 
             if (newOrderId == -1) {
                 throw new SQLException("Could not create order");
             }
 
-            // 2. Für jedes OrderItem prüfen, ob genügend Bestand da ist
-            // Dazu holen wir uns jeweils den aktuellen Bestand aus der DB
-            String selectProductSQL = "SELECT quantity FROM products WHERE productid = ? FOR UPDATE";
-            // Bestände aktualisieren
+            // Jetzt die OrderItems und Lagerbestand anpassen wie zuvor
             String updateProductSQL = "UPDATE products SET quantity = quantity - ? WHERE productid = ?";
-
-            // Order Items einfügen
             String insertOrderItemSQL = "INSERT INTO order_items (orderid, productid, quantity) VALUES (?, ?, ?)";
-
             orderItemStmt = connection.prepareStatement(insertOrderItemSQL);
             updateProductStmt = connection.prepareStatement(updateProductSQL);
 
-            PostgresDBProductManagement productManager = PostgresDBProductManagement.getPostgresDBProductManagement();
-
             for (OrderItem item : items) {
-                // Produktbestand checken
                 int currentStock = getCurrentStock(connection, item.getProductId());
                 if (item.getQuantity() > currentStock) {
                     throw new Exception("Not enough stock for productId: " + item.getProductId());
                 }
 
-                // Order Item einfügen
                 orderItemStmt.setInt(1, newOrderId);
                 orderItemStmt.setInt(2, item.getProductId());
                 orderItemStmt.setInt(3, item.getQuantity());
                 orderItemStmt.addBatch();
 
-                // Bestand reduzieren
                 updateProductStmt.setInt(1, item.getQuantity());
                 updateProductStmt.setInt(2, item.getProductId());
                 updateProductStmt.addBatch();
@@ -159,9 +165,7 @@ public class PostgresDBOrderManagement implements OrderManager {
             updateProductStmt.executeBatch();
 
             connection.commit();
-
-            // Erfolgreich --> Order als Objekt zurückgeben
-            return new Order(newOrderId, customerName, orderDate, items);
+            return new Order(newOrderId, customerName, returnedOrderDate, items);
 
         } catch (Exception e) {
             if (connection != null) {
@@ -176,6 +180,7 @@ public class PostgresDBOrderManagement implements OrderManager {
             if (connection != null) connection.close();
         }
     }
+
 
     @Override
     public Order getOrder(int orderId) throws Exception {

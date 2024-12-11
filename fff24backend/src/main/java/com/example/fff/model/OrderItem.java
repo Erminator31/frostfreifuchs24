@@ -1,4 +1,4 @@
-package model;
+package com.example.fff.model;
 
 
 import com.example.fff.api.OrderInterface;

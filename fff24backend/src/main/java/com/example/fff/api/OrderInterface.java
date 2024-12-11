@@ -1,6 +1,6 @@
 package com.example.fff.api;
 
-import model.OrderItem;
+import com.example.fff.model.OrderItem;
 
 import java.util.List;
 
