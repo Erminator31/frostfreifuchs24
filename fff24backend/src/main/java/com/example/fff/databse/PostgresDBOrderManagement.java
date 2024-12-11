@@ -224,7 +224,7 @@ public class PostgresDBOrderManagement implements OrderManager {
                 String updateReorderSQL = "UPDATE products SET daily_demand = ?, reorder_point = ? WHERE productid = ?";
                 updateReorderStmt = connection.prepareStatement(updateReorderSQL);
                 updateReorderStmt.setDouble(1, averageDailyDemand);
-                updateReorderStmt.setDouble(2, averageDailyDemand * 3); // 3 Tage Lieferzeit
+                updateReorderStmt.setDouble(2, averageDailyDemand * 7); // 3 Tage Lieferzeit und 4 Tage Puffer
                 updateReorderStmt.setInt(3, item.getProductId());
                 updateReorderStmt.executeUpdate();
 
@@ -240,7 +240,7 @@ public class PostgresDBOrderManagement implements OrderManager {
                     int currentQty = reorderRs.getInt("quantity");
                     int reorderQty = reorderRs.getInt("reorder_quantity");
 
-                    if (currentQty < averageDailyDemand * 3) {
+                    if (currentQty < averageDailyDemand * 7) {
                         // Nachbestellen
                         String restockSQL = "UPDATE products SET quantity = quantity + ? WHERE productid = ?";
                         PreparedStatement psRestock = connection.prepareStatement(restockSQL);

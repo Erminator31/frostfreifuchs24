@@ -112,7 +112,7 @@ public class PostgresDBProductManagement implements ProductManager {
     public Product addProduct(String productName, String productType, int quantity) throws Exception {
         // Initialer daily_demand ist 1000
         int initialDailyDemand = 35;
-        return addProduct(productName, productType, quantity, initialDailyDemand, initialDailyDemand * 3); // reorderPoint = dailyDemand * 3
+        return addProduct(productName, productType, quantity, initialDailyDemand, initialDailyDemand * 7); // reorderPoint = dailyDemand * 3
     }
 
     /**
@@ -122,7 +122,7 @@ public class PostgresDBProductManagement implements ProductManager {
      * @param productType     Der Typ des Produkts.
      * @param quantity        Die Menge, die hinzugefügt werden soll.
      * @param dailyDemand     Der tägliche Bedarf.
-     * @param reorderPoint    Der Reorder Point (dailyDemand * 3).
+     * @param reorderPoint    Der Reorder Point (dailyDemand * 7).
      * @return Das erstellte oder aktualisierte Produkt.
      * @throws Exception Wenn ein Fehler auftritt.
      */
@@ -173,7 +173,7 @@ public class PostgresDBProductManagement implements ProductManager {
                 checkProductStmt.close();
 
                 int newDailyDemand = (currentDailyDemand + dailyDemand) / 2; // Durchschnittlicher täglicher Bedarf
-                int newReorderPoint = newDailyDemand * 3;
+                int newReorderPoint = newDailyDemand * 7;
                 int newReorderQuantity = newDailyDemand * 14;
 
                 int newQuantity = currentQuantity + quantity;
@@ -399,7 +399,7 @@ public class PostgresDBProductManagement implements ProductManager {
             for (int productId : productIds) {
                 double avgDailyDemand = orderManager.calculateAverageDailyDemand(productId, connection);
                 int newDailyDemand = (int) Math.round(avgDailyDemand);
-                int newReorderPoint = newDailyDemand * 3;
+                int newReorderPoint = newDailyDemand * 7;
                 int newReorderQuantity = newDailyDemand * 14;
 
                 updateProductStmt.setInt(1, newDailyDemand);
