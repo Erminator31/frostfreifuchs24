@@ -373,17 +373,31 @@
             // Hinweis: Da productid SERIAL ist, können die IDs hochzählen.
             // Falls Sie unbedingt IDs 1,2,3 möchten, löschen Sie vorher die Tabelle.
             if (!has1) {
-                productManager.addProduct("Klaus Winter", "Mit Frostschutz", 1000);
+                productManager.addProduct("Klaus Winter", "Mit Frostschutz", 10000);
             }
 
             if (!has2) {
-                productManager.addProduct("Klaus Summer", "Mit Frostschutz", 1000);
+                productManager.addProduct("Klaus Summer", "Mit Frostschutz", 10000);
             }
 
             if (!has3) {
-                productManager.addProduct("Klaus Xtreme", "Mit Frostschutz", 1000);
+                productManager.addProduct("Klaus Xtreme", "Mit Frostschutz", 10000);
             }
         }
+
+        // Fügen Sie den neuen Endpoint hinzu, falls gewünscht
+
+        @GetMapping("/update-daily-demand")
+        public ResponseEntity<String> updateDailyDemand() {
+            try {
+                productManager.updateDailyDemand();
+                return ResponseEntity.ok("dailyDemand updated successfully.");
+            } catch (Exception e) {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body("Error updating dailyDemand: " + e.getMessage());
+            }
+        }
+
     }
 
 

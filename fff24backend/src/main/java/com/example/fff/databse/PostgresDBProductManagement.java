@@ -88,9 +88,9 @@ public class PostgresDBProductManagement implements ProductManager {
                 + "productname VARCHAR(255) NOT NULL, "
                 + "producttype VARCHAR(100) NOT NULL,"
                 + "quantity INT DEFAULT NULL, "
-                + "daily_demand INT DEFAULT 1000, "
-                + "reorder_point INT DEFAULT 3000, " // daily_demand * 3
-                + "reorder_quantity INT DEFAULT 6000" // Beispielwert, kann angepasst werden
+                + "daily_demand INT DEFAULT 500, "
+                + "reorder_point INT DEFAULT 250, " // daily_demand * 3
+                + "reorder_quantity INT DEFAULT 250" // Beispielwert, kann angepasst werden
                 + ");";
 
         try {
@@ -111,7 +111,7 @@ public class PostgresDBProductManagement implements ProductManager {
     @Override
     public Product addProduct(String productName, String productType, int quantity) throws Exception {
         // Initialer daily_demand ist 1000
-        int initialDailyDemand = 1000;
+        int initialDailyDemand = 35;
         return addProduct(productName, productType, quantity, initialDailyDemand, initialDailyDemand * 3); // reorderPoint = dailyDemand * 3
     }
 
@@ -362,4 +362,71 @@ public class PostgresDBProductManagement implements ProductManager {
                 connection.close();
         }
     }
+    // Ergänzen Sie die bestehende Klasse mit der updateDailyDemand Methode
+
+    @Override
+    public void updateDailyDemand() throws Exception {
+        final Logger updateDemandLogger = Logger.getLogger("UpdateDemandLogger");
+        updateDemandLogger.log(Level.INFO, "Start updating dailyDemand for all products.");
+
+        Connection connection = null;
+        PreparedStatement selectProductsStmt = null;
+        PreparedStatement updateProductStmt = null;
+        ResultSet rs = null;
+
+        try {
+            connection = basicDataSource.getConnection();
+            connection.setAutoCommit(false);
+
+            // Alle Produkte abrufen
+            String selectProductsSQL = "SELECT productid FROM products;";
+            selectProductsStmt = connection.prepareStatement(selectProductsSQL);
+            rs = selectProductsStmt.executeQuery();
+
+            List<Integer> productIds = new ArrayList<>();
+            while (rs.next()) {
+                productIds.add(rs.getInt("productid"));
+            }
+            rs.close();
+            selectProductsStmt.close();
+
+            // Vorbereitung des Update-Statements
+            String updateProductSQL = "UPDATE products SET daily_demand = ?, reorder_point = ?, reorder_quantity = ? WHERE productid = ?;";
+            updateProductStmt = connection.prepareStatement(updateProductSQL);
+
+            PostgresDBOrderManagement orderManager = PostgresDBOrderManagement.getInstance();
+
+            for (int productId : productIds) {
+                double avgDailyDemand = orderManager.calculateAverageDailyDemand(productId, connection);
+                int newDailyDemand = (int) Math.round(avgDailyDemand);
+                int newReorderPoint = newDailyDemand * 3;
+                int newReorderQuantity = newDailyDemand * 14;
+
+                updateProductStmt.setInt(1, newDailyDemand);
+                updateProductStmt.setInt(2, newReorderPoint);
+                updateProductStmt.setInt(3, newReorderQuantity);
+                updateProductStmt.setInt(4, productId);
+                updateProductStmt.addBatch();
+
+                updateDemandLogger.log(Level.INFO, "Updated Product ID " + productId + ": dailyDemand=" + newDailyDemand + ", reorderPoint=" + newReorderPoint + ", reorderQuantity=" + newReorderQuantity);
+            }
+
+            // Batch-Update ausführen
+            updateProductStmt.executeBatch();
+            connection.commit();
+            updateDemandLogger.log(Level.INFO, "dailyDemand update completed successfully.");
+        } catch (Exception e) {
+            if (connection != null) {
+                connection.rollback();
+            }
+            LOGGER.log(Level.SEVERE, "Error updating dailyDemand: " + e.getMessage(), e);
+            throw e;
+        } finally {
+            if (rs != null) rs.close();
+            if (selectProductsStmt != null) selectProductsStmt.close();
+            if (updateProductStmt != null) updateProductStmt.close();
+            if (connection != null) connection.close();
+        }
+    }
+
 }

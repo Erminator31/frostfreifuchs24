@@ -3,6 +3,7 @@ package com.example.fff.api;
 import com.example.fff.model.Order;
 import com.example.fff.model.OrderItem;
 
+import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.List;
@@ -25,5 +26,8 @@ public interface OrderManager {
     void deleteOrderTable() throws SQLException;
 
     void deleteOrderItemsTable() throws SQLException;
+
+    // Ergänzen Sie die bestehende Klasse mit der calculateAverageDailyDemand Methode
+    double calculateAverageDailyDemand(int productId, Connection connection) throws SQLException;
 }
 

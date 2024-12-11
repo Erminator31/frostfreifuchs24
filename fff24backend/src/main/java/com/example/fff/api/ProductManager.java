@@ -20,4 +20,6 @@ public interface ProductManager {
     boolean removeProduct(int productId);
 
     void deleteProductsTable() throws SQLException;
+
+    void updateDailyDemand() throws Exception;
 }

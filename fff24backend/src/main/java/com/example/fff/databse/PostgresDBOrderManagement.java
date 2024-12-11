@@ -400,5 +400,26 @@ public class PostgresDBOrderManagement implements OrderManager {
         }
     }
 
+    // Ergänzen Sie die bestehende Klasse mit der calculateAverageDailyDemand Methode
+@Override
+    public double calculateAverageDailyDemand(int productId, Connection connection) throws SQLException {
+        String query = "SELECT COUNT(*) AS total_quantity FROM orders o "
+                + "JOIN order_items oi ON o.orderid = oi.orderid "
+                + "WHERE oi.productid = ? AND o.orderdate >= NOW() - INTERVAL '14 days';";
+
+        try (PreparedStatement pstmt = connection.prepareStatement(query)) {
+            pstmt.setInt(1, productId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    int totalQuantity = rs.getInt("total_quantity");
+                    return (double) totalQuantity / 14.0; // Durchschnitt pro Tag
+                }
+            }
+        }
+
+        return 0.0;
+    }
+
+
 }
 
