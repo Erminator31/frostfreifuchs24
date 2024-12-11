@@ -2,6 +2,7 @@ package com.example.fff.api;
 
 import model.Product;
 
+import java.sql.SQLException;
 import java.util.List;
 
 public interface ProductManager {
@@ -11,4 +12,6 @@ public interface ProductManager {
     List<Product> readProducts(String productName, String productType);
 
     boolean removeProduct(int productId);
+
+    void deleteProductsTable() throws SQLException;
 }

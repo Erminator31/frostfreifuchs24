@@ -26,11 +26,12 @@
 
         private static final Logger LOGGER = Logger.getLogger(MappingController.class.getName());
 
+
         /**
-         * Provides a simple authentication check by returning "ok".
+         * Retrieves information based on the provided name.
          *
-         * @param name A sample name parameter for testing.
-         * @return A string response "ok".
+         * @param name the name parameter for the info retrieval
+         * @return a string indicating the success of the operation
          */
         @GetMapping("/auth")
         public String getInfo(@RequestParam(value = "name", defaultValue = "Name") String name) {
@@ -39,6 +40,12 @@
         }
 
 
+        /**
+         * Method to create a product table. This method logs the action, checks for token authentication, and then calls the createProductTable method in the ProductManager.
+         *
+         * @return a string "ok" indicating the success of the operation
+         * @throws Exception if an error occurs during table creation
+         */
         @GetMapping("/create-products-table")
         public String creatProductTable() throws Exception {
             Logger.getLogger("MappingController")
@@ -51,6 +58,12 @@
             return "ok";
         }
 
+        /**
+         * Adds a new product to the system.
+         *
+         * @param product the Product object to be added
+         * @return ResponseEntity containing a success message upon successful addition of the product
+         */
         @PostMapping(path = "/product/add", consumes = {MediaType.APPLICATION_JSON_VALUE,
                 MediaType.APPLICATION_XML_VALUE})
         public ResponseEntity<?> addProduct(@RequestBody Product product) {
@@ -70,6 +83,13 @@
             return null;
         }
 
+        /**
+         * Retrieves a list of products based on the provided product name and type.
+         *
+         * @param productName the name of the product to filter by (optional)
+         * @param productType the type of the product to filter by (optional)
+         * @return ResponseEntity<List < Product>> containing the list of products meeting the specified criteria
+         */
         @GetMapping("/inventory")
         public ResponseEntity<List<Product>> getProducts(
                 @RequestParam(value = "productName", required = false) String productName,
@@ -87,6 +107,14 @@
             return ResponseEntity.ok(products);
         }
 
+        /**
+         * Removes a product from the system based on the provided product ID.
+         *
+         * @param productId the ID of the product to be removed
+         * @return ResponseEntity containing a success message if the product is removed successfully,
+         *         ResponseEntity with HTTP status 404 if the product is not found,
+         *         or ResponseEntity with HTTP status 500 if an error occurs during the removal process
+         */
         @DeleteMapping("/product/{id}")
         public ResponseEntity<?> removeProduct(@PathVariable("id") int productId) {
             Logger.getLogger("MappingController").log(Level.INFO, "MappingController DELETE /product/" + productId);
@@ -97,12 +125,23 @@
                     response.put("message", "Product with ID " + productId + " removed successfully.");
                     return ResponseEntity.ok(response);
                 } else {
-                    // Wenn kein Produkt gefunden wurde
+
                     return ResponseEntity.notFound().build();
                 }
             } catch (Exception e) {
                 e.printStackTrace();
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error removing product: " + e.getMessage());
+            }
+        }
+
+        @GetMapping("/delete-products-table")
+        public ResponseEntity<String> deleteProductsTable() {
+            try {
+                productManager.deleteProductsTable();
+                return ResponseEntity.ok("Products table deleted successfully.");
+            } catch (Exception e) {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body("Error deleting products table: " + e.getMessage());
             }
         }
 

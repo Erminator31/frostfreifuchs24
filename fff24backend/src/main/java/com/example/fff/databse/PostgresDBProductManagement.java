@@ -25,8 +25,10 @@ public class PostgresDBProductManagement implements ProductManager {
 
     private static final Logger LOGGER = Logger.getLogger(PostgresDBProductManagement.class.getName());
 
+
     /**
-     * Private constructor initializes the data source.
+     * Constructor for PostgresDBProductManagement class.
+     * Initializes the basicDataSource with the provided database URL, username, and password.
      */
     private PostgresDBProductManagement() {
         basicDataSource = new BasicDataSource();
@@ -34,6 +36,14 @@ public class PostgresDBProductManagement implements ProductManager {
         basicDataSource.setUsername(username);
         basicDataSource.setPassword(password);
     }
+
+    /**
+     * Closes the provided resources including ResultSet, PreparedStatement, and Connection.
+     *
+     * @param rs The ResultSet to be closed.
+     * @param stmt The PreparedStatement to be closed.
+     * @param connection The Connection to be closed.
+     */
     private void closeResources(ResultSet rs, PreparedStatement stmt, Connection connection) {
         try {
             if (rs != null) {
@@ -50,11 +60,11 @@ public class PostgresDBProductManagement implements ProductManager {
             e.printStackTrace();
         }
     }
+
     /**
-     * Singleton pattern: Get an instance of this manager.
-     * Create it if it doesn't exist.
+     * Retrieves the instance of PostgresDBProductManagement. If the instance does not exist, a new one is created.
      *
-     * @return instance of PostgresDBEventManagerImpl
+     * @return The instance of PostgresDBProductManagement.
      */
     public static PostgresDBProductManagement getPostgresDBProductManagement() {
         if (postgresDBProductManagement == null) {
@@ -94,6 +104,13 @@ public class PostgresDBProductManagement implements ProductManager {
     }
 
 
+    /**
+     * Adds a new product with the given product name and product type to the database.
+     *
+     * @param productName The name of the product to be added.
+     * @param productType The type of the product to be added.
+     * @return The newly created Product object if the addition was successful, null otherwise.
+     */
     @Override
     public Product addProduct(String productName, String productType) {
 
@@ -150,6 +167,13 @@ public class PostgresDBProductManagement implements ProductManager {
         // Falls ein Fehler auftritt, geben wir null zurück oder werfen eine RuntimeException
         return null;
     }
+    /**
+     * Retrieves a list of products based on the specified filters.
+     *
+     * @param productName The name of the product to filter by. Can be null or empty to ignore.
+     * @param productType The type of the product to filter by. Can be null or empty to ignore.
+     * @return A List of Product objects that match the provided filters.
+     */
     @Override
     public List<Product> readProducts(String productName, String productType) {
         final Logger readProductLogger = Logger.getLogger("ReadProductLogger");
@@ -204,6 +228,12 @@ public class PostgresDBProductManagement implements ProductManager {
         return products;
     }
 
+    /**
+     * Removes a product from the database based on the provided product ID.
+     *
+     * @param productId The ID of the product to be removed.
+     * @return True if the product was successfully removed, false otherwise.
+     */
     @Override
     public boolean removeProduct(int productId) {
         final Logger removeProductLogger = Logger.getLogger("RemoveProductLogger");
@@ -238,6 +268,23 @@ public class PostgresDBProductManagement implements ProductManager {
         return false; // Wenn ein Fehler auftritt oder kein Produkt gefunden wurde
     }
 
+@Override
+    public void deleteProductsTable() throws SQLException {
+        Connection connection = null;
+        Statement stmt = null;
+        String dropTableSQL = "DROP TABLE IF EXISTS products CASCADE;";
 
-
+        try {
+            connection = basicDataSource.getConnection();
+            stmt = connection.createStatement();
+            stmt.execute(dropTableSQL);
+        } catch (SQLException e) {
+            throw e;
+        } finally {
+            if (stmt != null)
+                stmt.close();
+            if (connection != null)
+                connection.close();
+        }
+    }
 }
