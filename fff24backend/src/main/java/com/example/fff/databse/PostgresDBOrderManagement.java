@@ -215,16 +215,19 @@ public class PostgresDBOrderManagement implements OrderManager {
                 demandRs.close();
                 checkDemandStmt.close();
 
-                // Durchschnittlicher täglicher Bedarf
-                double averageDailyDemand = ordersCount / 10.0;
 
-                // Aktualisieren des täglichen Bedarfs und des Reorder Points
+
+// Durchschnittlicher täglicher Bedarf basierend auf den letzten 10 Bestellungen
+                double averageDailyDemand = calculateAverageDailyDemand(item.getProductId(), connection);
+
+// Aktualisieren des täglichen Bedarfs und des Reorder Points
                 String updateReorderSQL = "UPDATE products SET daily_demand = ?, reorder_point = ? WHERE productid = ?";
                 updateReorderStmt = connection.prepareStatement(updateReorderSQL);
                 updateReorderStmt.setDouble(1, averageDailyDemand);
                 updateReorderStmt.setDouble(2, averageDailyDemand * 3); // 3 Tage Lieferzeit
                 updateReorderStmt.setInt(3, item.getProductId());
                 updateReorderStmt.executeUpdate();
+
                 updateReorderStmt.close();
 
                 // 4. Überprüfen, ob der Bestand unter den Reorder Point gefallen ist
@@ -400,25 +403,49 @@ public class PostgresDBOrderManagement implements OrderManager {
         }
     }
 
-    // Ergänzen Sie die bestehende Klasse mit der calculateAverageDailyDemand Methode
-@Override
+    @Override
     public double calculateAverageDailyDemand(int productId, Connection connection) throws SQLException {
-        String query = "SELECT COUNT(*) AS total_quantity FROM orders o "
+        String query = "SELECT o.orderdate, oi.quantity FROM orders o "
                 + "JOIN order_items oi ON o.orderid = oi.orderid "
-                + "WHERE oi.productid = ? AND o.orderdate >= NOW() - INTERVAL '14 days';";
+                + "WHERE oi.productid = ? "
+                + "ORDER BY o.orderdate DESC "
+                + "LIMIT 10;";
+
+        List<Timestamp> orderDates = new ArrayList<>();
+        int totalQuantity = 0;
 
         try (PreparedStatement pstmt = connection.prepareStatement(query)) {
             pstmt.setInt(1, productId);
             try (ResultSet rs = pstmt.executeQuery()) {
-                if (rs.next()) {
-                    int totalQuantity = rs.getInt("total_quantity");
-                    return (double) totalQuantity / 14.0; // Durchschnitt pro Tag
+                while (rs.next()) {
+                    Timestamp orderDate = rs.getTimestamp("orderdate");
+                    int quantity = rs.getInt("quantity");
+                    orderDates.add(orderDate);
+                    totalQuantity += quantity;
                 }
             }
         }
 
-        return 0.0;
+        if (orderDates.isEmpty()) {
+            return 0.0;
+        }
+
+        // Bestimmen Sie den Zeitraum zwischen der ältesten und der neuesten Bestellung
+        Timestamp oldestOrder = orderDates.get(orderDates.size() - 1);
+        Timestamp newestOrder = orderDates.get(0);
+        long milliseconds = newestOrder.getTime() - oldestOrder.getTime();
+        double days = milliseconds / (1000.0 * 60 * 60 * 24);
+
+        // Vermeiden Sie Division durch Null
+        if (days == 0) {
+            days = 1;
+        }
+
+        // Durchschnittlicher täglicher Bedarf
+        return totalQuantity / days;
     }
+
+
 
 
 }
