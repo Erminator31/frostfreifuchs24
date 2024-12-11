@@ -58,7 +58,7 @@ public class Product implements ProductInterface {
 
     @Override
     public int getProductQuantity() {
-        return 0;
+        return quantity;
     }
 
     @Override
