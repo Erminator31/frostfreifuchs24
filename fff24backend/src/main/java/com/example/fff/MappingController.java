@@ -91,25 +91,24 @@
          * @param product the Product object to be added
          * @return ResponseEntity containing a success message upon successful addition of the product
          */
-        @PostMapping(path = "/product/add", consumes = {MediaType.APPLICATION_JSON_VALUE,
-                MediaType.APPLICATION_XML_VALUE})
+        @PostMapping(path = "/product/add", consumes = {MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_XML_VALUE})
         public ResponseEntity<?> addProduct(@RequestBody Product product) {
             Logger.getLogger("MappingController").log(Level.INFO, "MappingController POST /products/add " + product.getProductName());
             try {
-                productManager.addProduct(
+                Product createdOrUpdated = productManager.addProduct(
                         product.getProductName(),
                         product.getProductType(),
                         product.getProductQuantity()
                 );
 
                 Map<String, String> response = new HashMap<>();
-                response.put("message", "Product " + product.getProductName() + " added successfully.");
+                response.put("message", "Product " + product.getProductName() + " added/updated successfully.");
                 return ResponseEntity.ok(response);
             } catch (Exception e) {
-                ResponseEntity.badRequest();
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Error: " + e.getMessage());
             }
-            return null;
         }
+
 
         /**
          * Retrieves a list of products based on the provided product name and type.
