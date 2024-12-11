@@ -3,6 +3,7 @@
     import com.example.fff.api.ProductManager;
     import com.example.fff.databse.PostgresDBProductManagement;
     import model.Product;
+    import org.springframework.http.HttpStatus;
     import org.springframework.http.MediaType;
     import org.springframework.http.ResponseEntity;
     import org.springframework.web.bind.annotation.*;
@@ -84,6 +85,25 @@
             }
 
             return ResponseEntity.ok(products);
+        }
+
+        @DeleteMapping("/product/{id}")
+        public ResponseEntity<?> removeProduct(@PathVariable("id") int productId) {
+            Logger.getLogger("MappingController").log(Level.INFO, "MappingController DELETE /product/" + productId);
+            try {
+                boolean removed = productManager.removeProduct(productId);
+                if (removed) {
+                    Map<String, String> response = new HashMap<>();
+                    response.put("message", "Product with ID " + productId + " removed successfully.");
+                    return ResponseEntity.ok(response);
+                } else {
+                    // Wenn kein Produkt gefunden wurde
+                    return ResponseEntity.notFound().build();
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error removing product: " + e.getMessage());
+            }
         }
 
 

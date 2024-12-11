@@ -10,4 +10,5 @@ public interface ProductManager {
     Product addProduct(String productName, String productType);
     List<Product> readProducts(String productName, String productType);
 
+    boolean removeProduct(int productId);
 }

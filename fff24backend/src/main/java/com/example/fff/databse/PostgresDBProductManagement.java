@@ -204,6 +204,39 @@ public class PostgresDBProductManagement implements ProductManager {
         return products;
     }
 
+    @Override
+    public boolean removeProduct(int productId) {
+        final Logger removeProductLogger = Logger.getLogger("RemoveProductLogger");
+        removeProductLogger.log(Level.INFO, "Start removing product with ID: " + productId);
+
+        Connection connection = null;
+        PreparedStatement stmt = null;
+
+        String deleteSQL = "DELETE FROM products WHERE productid = ?";
+
+        try {
+            connection = basicDataSource.getConnection();
+            stmt = connection.prepareStatement(deleteSQL);
+            stmt.setInt(1, productId);
+
+            int affectedRows = stmt.executeUpdate();
+            // affectedRows sollte 1 sein, wenn genau ein Produkt entfernt wurde.
+            return affectedRows == 1;
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        } finally {
+            // Ressourcen freigeben
+            if (stmt != null) {
+                try { stmt.close(); } catch (SQLException e) { e.printStackTrace(); }
+            }
+            if (connection != null) {
+                try { connection.close(); } catch (SQLException e) { e.printStackTrace(); }
+            }
+        }
+
+        return false; // Wenn ein Fehler auftritt oder kein Produkt gefunden wurde
+    }
 
 
 
