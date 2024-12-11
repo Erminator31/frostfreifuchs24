@@ -152,7 +152,7 @@ public class PostgresDBProductManagement implements ProductManager {
             rs.close();
             sumStmt.close();
 
-            if (currentTotalQuantity + quantity > 20000) {
+            if (currentTotalQuantity + quantity > 200000) {
                 connection.rollback();
                 throw new Exception("Cannot add product. Adding " + quantity + " units would exceed the total warehouse capacity of 20000.");
             }
