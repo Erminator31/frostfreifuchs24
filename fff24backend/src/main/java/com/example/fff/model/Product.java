@@ -7,23 +7,56 @@ import com.fasterxml.jackson.annotation.JsonAnySetter;
 import java.util.HashMap;
 import java.util.Map;
 
-public class Product implements ProductInterface {
-
+public class Product implements ProductInterface{
     private int productId;
     private String productName;
-
     private String productType;
-
     private int quantity;
+    private int dailyDemand;
+    private int reorderPoint;
+    private int reorderQuantity;
 
-    private final Map<String, Object> additionalProperties = new HashMap<>();
+    // Hinzugefügtes Feld für zusätzliche Eigenschaften
+    private Map<String, Object> additionalProperties = new HashMap<>();
 
-
-    public Product(int productId, String productName, String productType, int quantity) {
+    // Konstruktoren
+    public Product(int productId, String productName, String productType, int quantity, int dailyDemand, int reorderPoint, int reorderQuantity) {
         this.productId = productId;
         this.productName = productName;
         this.productType = productType;
         this.quantity = quantity;
+        this.dailyDemand = dailyDemand;
+        this.reorderPoint = reorderPoint;
+        this.reorderQuantity = reorderQuantity;
+    }
+
+    @Override
+    public int getDailyDemand() {
+        return dailyDemand;
+    }
+@Override
+    public void setDailyDemand(int dailyDemand) {
+    this.dailyDemand = dailyDemand;
+    }
+
+    @Override
+    public int getReorderPoint() {
+        return reorderPoint;
+    }
+
+    @Override
+    public void setReorderPoint(int reorderPoint) {
+        this.reorderPoint = reorderPoint;
+    }
+
+    @Override
+    public int getReorderQuantity() {
+        return reorderQuantity;
+    }
+
+    @Override
+    public void setReorderQuantity(int reorderQuantity) {
+        this.reorderQuantity = reorderQuantity;
     }
 
     /**

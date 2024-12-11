@@ -9,7 +9,11 @@ public interface ProductManager {
     void createProductTable() throws Exception;
 
 
+
+
     Product addProduct(String productName, String productType, int quantity) throws Exception;
+
+    Product addProduct(String productName, String productType, int quantity, int reorderPoint, int reorderQuantity, int dailyDemand) throws Exception;
 
     List<Product> readProducts(String productName, String productType);
 

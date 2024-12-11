@@ -1,9 +1,11 @@
 package com.example.fff.model;
 
 import com.example.fff.api.OrderInterface;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import java.util.List;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class Order implements OrderInterface {
     private int orderId;
     private String customerName;

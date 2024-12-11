@@ -257,11 +257,6 @@
             }
         }
 
-        /**
-         * Generiert historische Daten zwischen Januar 2023 und November 2024.
-         * Pro Monat werden ca. 30 Bestellungen eingefügt, wobei saisonale Muster berücksichtigt werden.
-         * Hier wird nun ein individuelles Datum (innerhalb des jeweiligen Monats) für jede Bestellung gesetzt.
-         */
         @GetMapping("/generate-history")
         public ResponseEntity<String> generateHistoricalData() {
             try {
@@ -298,17 +293,17 @@
                     for (int i = 0; i < ordersPerMonth; i++) {
                         String customer = customerNames[i % customerNames.length];
 
-                        // 2 OrderItems pro Bestellung
+                        // 2 OrderItems pro Bestellung erstellen
                         List<OrderItem> items = new ArrayList<>();
                         items.add(generateOrderItemWithSeason(p1, p2, p3));
                         items.add(generateOrderItemWithSeason(p1, p2, p3));
 
-                        // Wir wählen ein zufälliges Datum im aktuellen Monat zwischen dem 1. und letzten Tag
+                        // Zufälliges Datum im aktuellen Monat
                         int randomDay = ThreadLocalRandom.current().nextInt(1, lengthOfMonth + 1);
                         LocalDate randomDate = current.withDayOfMonth(randomDay);
 
-                        // Optional: Auch die Uhrzeit leicht variieren
-                        int randomHour = ThreadLocalRandom.current().nextInt(8, 18); // zwischen 8 und 17 Uhr
+                        // Zufällige Uhrzeit zwischen 8 und 17 Uhr
+                        int randomHour = ThreadLocalRandom.current().nextInt(8, 18);
                         int randomMinute = ThreadLocalRandom.current().nextInt(0, 60);
 
                         LocalDateTime orderDateTime = LocalDateTime.of(randomDate.getYear(),
@@ -319,7 +314,7 @@
 
                         Timestamp orderTimestamp = Timestamp.valueOf(orderDateTime);
 
-                        // Bestellung mit spezifischem Datum erstellen
+                        // Bestellung erstellen mit spezifischem Datum
                         orderManager.createOrder(customer, items, orderTimestamp);
                     }
 
@@ -335,6 +330,14 @@
             }
         }
 
+        /**
+         * Generiert ein OrderItem basierend auf saisonalen Wahrscheinlichkeiten.
+         *
+         * @param p1 Wahrscheinlichkeit für Produkt 1
+         * @param p2 Wahrscheinlichkeit für Produkt 2
+         * @param p3 Wahrscheinlichkeit für Produkt 3
+         * @return Das generierte OrderItem
+         */
         private OrderItem generateOrderItemWithSeason(double p1, double p2, double p3) {
             double rnd = Math.random();
             int productId;
@@ -351,22 +354,31 @@
             return new OrderItem(productId, quantity);
         }
 
+        /**
+         * Stellt sicher, dass die Produkte mit IDs 1, 2 und 3 existieren. Falls nicht, werden sie angelegt.
+         *
+         * @throws Exception Wenn ein Fehler auftritt.
+         */
         private void ensureProductsExist() throws Exception {
-            List<Product> existing = productManager.readProducts(null,null);
-            boolean has1 = existing.stream().anyMatch(p -> p.getProductId()==1);
-            boolean has2 = existing.stream().anyMatch(p -> p.getProductId()==2);
-            boolean has3 = existing.stream().anyMatch(p -> p.getProductId()==3);
+            // Prüfen, ob Produkt 1,2,3 existieren, sonst anlegen
+            List<Product> existing = productManager.readProducts(null, null);
+            boolean has1 = existing.stream().anyMatch(p -> p.getProductId() == 1);
+            boolean has2 = existing.stream().anyMatch(p -> p.getProductId() == 2);
+            boolean has3 = existing.stream().anyMatch(p -> p.getProductId() == 3);
 
-            if(!has1) {
-                productManager.addProduct("Klaus Winter", "Mit Frostschutz", 20000);
+            // Wenn keines der Produkte existiert, legen wir sie an.
+            // Hinweis: Da productid SERIAL ist, können die IDs hochzählen.
+            // Falls Sie unbedingt IDs 1,2,3 möchten, löschen Sie vorher die Tabelle.
+            if (!has1) {
+                productManager.addProduct("Scheibenwischmittel mit Frostschutz", "Winter", 1000);
             }
 
-            if(!has2) {
-                productManager.addProduct("Klaus Summer", "Ohne Frostschutz", 20000);
+            if (!has2) {
+                productManager.addProduct("Scheibenwischmittel ohne Frostschutz", "Sommer", 1000);
             }
 
-            if(!has3) {
-                productManager.addProduct("Klaus Extreme", "Mit Frostschutz", 20000);
+            if (!has3) {
+                productManager.addProduct("Scheibenwischmittel mit extrem Frostschutz", "Extrem-Winter", 1000);
             }
         }
     }

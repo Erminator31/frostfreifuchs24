@@ -93,79 +93,168 @@ public class PostgresDBOrderManagement implements OrderManager {
     }
 
 
+    /**
+     * Erstellt eine neue Bestellung.
+     *
+     * @param customerName Der Name des Kunden.
+     * @param items        Die bestellten Artikel.
+     * @return Die erstellte Bestellung.
+     * @throws Exception Wenn ein Fehler auftritt.
+     */
     @Override
     public Order createOrder(String customerName, List<OrderItem> items) throws Exception {
-        // Ruft die neue Methode mit null für das Datum auf
-        return createOrder(customerName, items, null);
+        // Standardmethode ohne Datum
+        return createOrder(customerName, items, new Timestamp(System.currentTimeMillis()));
     }
 
+    /**
+     * Erstellt eine neue Bestellung mit einem spezifischen Datum.
+     *
+     * @param customerName Der Name des Kunden.
+     * @param items        Die bestellten Artikel.
+     * @param orderDate    Das Datum der Bestellung.
+     * @return Die erstellte Bestellung.
+     * @throws Exception Wenn ein Fehler auftritt.
+     */
     @Override
     public Order createOrder(String customerName, List<OrderItem> items, Timestamp orderDate) throws Exception {
         Connection connection = null;
         PreparedStatement orderStmt = null;
         PreparedStatement orderItemStmt = null;
         PreparedStatement updateProductStmt = null;
+        PreparedStatement checkDemandStmt = null;
+        PreparedStatement updateReorderStmt = null;
         ResultSet rs = null;
 
         try {
             connection = basicDataSource.getConnection();
             connection.setAutoCommit(false);
 
-            String insertOrderSQL;
-            if (orderDate == null) {
-                // Kein Datum angegeben, Standardwert (NOW()) verwenden
-                insertOrderSQL = "INSERT INTO orders (customername) VALUES (?) RETURNING orderid, orderdate";
-            } else {
-                // Benutzerdefiniertes Datum verwenden
-                insertOrderSQL = "INSERT INTO orders (customername, orderdate) VALUES (?, ?) RETURNING orderid, orderdate";
-            }
-
+            // 1. Neuen Order-Eintrag erzeugen
+            String insertOrderSQL = "INSERT INTO orders (orderdate, customername) VALUES (?, ?) RETURNING orderid, orderdate";
             orderStmt = connection.prepareStatement(insertOrderSQL);
-            orderStmt.setString(1, customerName);
-            if (orderDate != null) {
-                orderStmt.setTimestamp(2, orderDate);
-            }
-
+            orderStmt.setTimestamp(1, orderDate);
+            orderStmt.setString(2, customerName);
             rs = orderStmt.executeQuery();
 
             int newOrderId = -1;
-            String returnedOrderDate = null;
+            Timestamp returnedOrderDate = null;
             if (rs.next()) {
                 newOrderId = rs.getInt("orderid");
-                returnedOrderDate = rs.getString("orderdate");
+                returnedOrderDate = rs.getTimestamp("orderdate");
             }
 
             if (newOrderId == -1) {
                 throw new SQLException("Could not create order");
             }
 
-            // Jetzt die OrderItems und Lagerbestand anpassen wie zuvor
-            String updateProductSQL = "UPDATE products SET quantity = quantity - ? WHERE productid = ?";
+            // 2. Für jedes OrderItem prüfen, ob genügend Bestand da ist und aktualisieren
+            String selectProductSQL = "SELECT quantity, daily_demand, reorder_point, reorder_quantity FROM products WHERE productid = ? FOR UPDATE";
+            String updateProductSQL = "UPDATE products SET quantity = quantity - ?, daily_demand = ?, reorder_point = ? WHERE productid = ?";
             String insertOrderItemSQL = "INSERT INTO order_items (orderid, productid, quantity) VALUES (?, ?, ?)";
+
             orderItemStmt = connection.prepareStatement(insertOrderItemSQL);
             updateProductStmt = connection.prepareStatement(updateProductSQL);
 
             for (OrderItem item : items) {
-                int currentStock = getCurrentStock(connection, item.getProductId());
+                // Produktbestand und täglicher Bedarf abrufen
+                PreparedStatement ps = connection.prepareStatement(selectProductSQL);
+                ps.setInt(1, item.getProductId());
+                ResultSet productRs = ps.executeQuery();
+
+                if (!productRs.next()) {
+                    throw new Exception("Product not found: " + item.getProductId());
+                }
+
+                int currentStock = productRs.getInt("quantity");
+                int dailyDemand = productRs.getInt("daily_demand");
+                int reorderPoint = productRs.getInt("reorder_point");
+                int reorderQuantity = productRs.getInt("reorder_quantity");
+                productRs.close();
+                ps.close();
+
                 if (item.getQuantity() > currentStock) {
                     throw new Exception("Not enough stock for productId: " + item.getProductId());
                 }
 
+                // Bestellartikel einfügen
                 orderItemStmt.setInt(1, newOrderId);
                 orderItemStmt.setInt(2, item.getProductId());
                 orderItemStmt.setInt(3, item.getQuantity());
                 orderItemStmt.addBatch();
 
+                // Bestand reduzieren und daily_demand aktualisieren
                 updateProductStmt.setInt(1, item.getQuantity());
-                updateProductStmt.setInt(2, item.getProductId());
+                updateProductStmt.setInt(2, dailyDemand); // Hier können Sie später die Aktualisierung basierend auf dem Bedarf hinzufügen
+                updateProductStmt.setInt(3, reorderPoint); // Kann ebenfalls angepasst werden
+                updateProductStmt.setInt(4, item.getProductId());
                 updateProductStmt.addBatch();
             }
 
             orderItemStmt.executeBatch();
             updateProductStmt.executeBatch();
 
+            // 3. Berechnung des durchschnittlichen täglichen Bedarfs der letzten 10 Tage und Aktualisierung des Reorder Points
+            for (OrderItem item : items) {
+                // Durchschnittlichen täglichen Bedarf der letzten 10 Tage berechnen
+                String calculateDemandSQL = "SELECT COUNT(*) AS orders_count FROM order_items oi "
+                        + "JOIN orders o ON oi.orderid = o.orderid "
+                        + "WHERE oi.productid = ? AND o.orderdate >= ?";
+                checkDemandStmt = connection.prepareStatement(calculateDemandSQL);
+                checkDemandStmt.setInt(1, item.getProductId());
+
+                // 10 Tage zurück ab dem aktuellen orderDate
+                Timestamp tenDaysAgo = new Timestamp(orderDate.getTime() - (10L * 24 * 60 * 60 * 1000));
+                checkDemandStmt.setTimestamp(2, tenDaysAgo);
+                ResultSet demandRs = checkDemandStmt.executeQuery();
+
+                int ordersCount = 0;
+                if (demandRs.next()) {
+                    ordersCount = demandRs.getInt("orders_count");
+                }
+                demandRs.close();
+                checkDemandStmt.close();
+
+                // Durchschnittlicher täglicher Bedarf
+                double averageDailyDemand = ordersCount / 10.0;
+
+                // Aktualisieren des täglichen Bedarfs und des Reorder Points
+                String updateReorderSQL = "UPDATE products SET daily_demand = ?, reorder_point = ? WHERE productid = ?";
+                updateReorderStmt = connection.prepareStatement(updateReorderSQL);
+                updateReorderStmt.setDouble(1, averageDailyDemand);
+                updateReorderStmt.setDouble(2, averageDailyDemand * 3); // 3 Tage Lieferzeit
+                updateReorderStmt.setInt(3, item.getProductId());
+                updateReorderStmt.executeUpdate();
+                updateReorderStmt.close();
+
+                // 4. Überprüfen, ob der Bestand unter den Reorder Point gefallen ist
+                String checkReorderSQL = "SELECT quantity, reorder_quantity FROM products WHERE productid = ?";
+                PreparedStatement psCheck = connection.prepareStatement(checkReorderSQL);
+                psCheck.setInt(1, item.getProductId());
+                ResultSet reorderRs = psCheck.executeQuery();
+
+                if (reorderRs.next()) {
+                    int currentQty = reorderRs.getInt("quantity");
+                    int reorderQty = reorderRs.getInt("reorder_quantity");
+
+                    if (currentQty < averageDailyDemand * 3) {
+                        // Nachbestellen
+                        String restockSQL = "UPDATE products SET quantity = quantity + ? WHERE productid = ?";
+                        PreparedStatement psRestock = connection.prepareStatement(restockSQL);
+                        psRestock.setInt(1, reorderQty);
+                        psRestock.setInt(2, item.getProductId());
+                        psRestock.executeUpdate();
+                        psRestock.close();
+                    }
+                }
+                reorderRs.close();
+                psCheck.close();
+            }
+
             connection.commit();
-            return new Order(newOrderId, customerName, returnedOrderDate, items);
+
+            // Erfolgreich --> Order als Objekt zurückgeben
+            return new Order(newOrderId, customerName, returnedOrderDate.toString(), items);
 
         } catch (Exception e) {
             if (connection != null) {
@@ -177,9 +266,12 @@ public class PostgresDBOrderManagement implements OrderManager {
             if (orderStmt != null) orderStmt.close();
             if (orderItemStmt != null) orderItemStmt.close();
             if (updateProductStmt != null) updateProductStmt.close();
+            if (checkDemandStmt != null) checkDemandStmt.close();
+            if (updateReorderStmt != null) updateReorderStmt.close();
             if (connection != null) connection.close();
         }
     }
+
 
 
     @Override
