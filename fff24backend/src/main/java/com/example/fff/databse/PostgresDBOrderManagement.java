@@ -47,7 +47,7 @@ public class PostgresDBOrderManagement implements OrderManager {
                 + "orderid SERIAL PRIMARY KEY, "
                 + "orderdate TIMESTAMP NOT NULL DEFAULT NOW(), "
                 + "customername VARCHAR(255), "
-                + "quantity INT DEFAULT NULL, "
+                + "quantity INT DEFAULT NULL "
                 + ");";
 
         try {
