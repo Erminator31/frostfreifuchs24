@@ -86,7 +86,7 @@ public class PostgresDBProductManagement implements ProductManager {
         String createTableSQL = "CREATE TABLE IF NOT EXISTS products ("
                 + "productid SERIAL PRIMARY KEY, "
                 + "productname VARCHAR(255) NOT NULL, "
-                + "producttype VARCHAR(100) NOT NULL"
+                + "producttype VARCHAR(100) NOT NULL,"
                 + "quantity INT DEFAULT NULL, "
                 + ");";
 

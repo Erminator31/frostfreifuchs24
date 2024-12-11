@@ -51,13 +51,36 @@
          * @throws Exception if an error occurs during table creation
          */
         @GetMapping("/create-products-table")
-        public String creatProductTable() throws Exception {
+        public String createProductTable() throws Exception {
             Logger.getLogger("MappingController")
                     .log(Level.INFO, "MappingController create-product-table ");
 
             // Check token
 
             productManager.createProductTable();
+
+            return "ok";
+        }
+        @GetMapping("/create-orders-table")
+        public String createOrdersTable() throws Exception {
+            Logger.getLogger("MappingController")
+                    .log(Level.INFO, "MappingController create-orders-table ");
+
+            // Check token
+
+            orderManager.createOrderTable();
+
+            return "ok";
+        }
+
+        @GetMapping("/create-orderitems-table")
+        public String createOrderItemsTable() throws Exception {
+            Logger.getLogger("MappingController")
+                    .log(Level.INFO, "MappingController create-orders-table ");
+
+            // Check token
+
+            orderManager.createOrderItemTable();
 
             return "ok";
         }
@@ -146,6 +169,27 @@
             } catch (Exception e) {
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                         .body("Error deleting products table: " + e.getMessage());
+            }
+        }
+        @GetMapping("/delete-orders-table")
+        public ResponseEntity<String> deleteOrderTable() {
+            try {
+                orderManager.deleteOrderTable();
+                return ResponseEntity.ok("Products table order successfully.");
+            } catch (Exception e) {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body("Error deleting order table: " + e.getMessage());
+            }
+        }
+
+        @GetMapping("/delete-orders-table")
+        public ResponseEntity<String> deleteOrderItemsTable() {
+            try {
+                orderManager.deleteOrderItemsTable();
+                return ResponseEntity.ok("orderitems table order successfully.");
+            } catch (Exception e) {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body("Error deleting orderitems table: " + e.getMessage());
             }
         }
 

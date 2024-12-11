@@ -3,11 +3,8 @@ package com.example.fff.databse;
 import com.example.fff.api.OrderManager;
 
 
-import com.example.fff.api.OrderManager;
-import com.example.fff.databse.PostgresDBProductManagement;
 import model.Order;
 import model.OrderItem;
-import model.Product;
 import org.apache.commons.dbcp.BasicDataSource;
 
 import java.sql.*;
@@ -40,6 +37,61 @@ public class PostgresDBOrderManagement implements OrderManager {
         }
         return postgresDBOrderManagement;
     }
+
+    @Override
+    public void createOrderTable() throws Exception {
+        Connection connection = null;
+        PreparedStatement pstmt = null;
+        // CREATE TABLE Statement korrigiert und auf products angepasst
+        String createTableSQL = "CREATE TABLE IF NOT EXISTS orders ("
+                + "orderid SERIAL PRIMARY KEY, "
+                + "orderdate TIMESTAMP NOT NULL DEFAULT NOW(), "
+                + "customername VARCHAR(255), "
+                + "quantity INT DEFAULT NULL, "
+                + ");";
+
+        try {
+            connection = basicDataSource.getConnection();
+            pstmt = connection.prepareStatement(createTableSQL);
+            pstmt.execute();
+        } catch (SQLException e) {
+            throw new Exception("Error creating products table", e);
+        } finally {
+            if (pstmt != null)
+                pstmt.close();
+            if (connection != null)
+                connection.close();
+        }
+    }
+
+    @Override
+    public void createOrderItemTable() throws Exception {
+        Connection connection = null;
+        PreparedStatement pstmt = null;
+        // CREATE TABLE Statement korrigiert und auf products angepasst
+        String createTableSQL = "CREATE TABLE IF NOT EXISTS order_items ("
+                + "orderitemid SERIAL PRIMARY KEY, "
+                + "orderid INT NOT NULL, "
+                + "productid INT NOT NULL, "
+                + "quantity INT DEFAULT NULL, "
+       + "FOREIGN KEY (orderid) REFERENCES orders(orderid) ON DELETE CASCADE, "
+                + "FOREIGN KEY (productid) REFERENCES products(productid) ON DELETE CASCADE "
+                + ");";
+
+        try {
+            connection = basicDataSource.getConnection();
+            pstmt = connection.prepareStatement(createTableSQL);
+            pstmt.execute();
+        } catch (SQLException e) {
+            throw new Exception("Error creating products table", e);
+        } finally {
+            if (pstmt != null)
+                pstmt.close();
+            if (connection != null)
+                connection.close();
+        }
+    }
+
 
     @Override
     public Order createOrder(String customerName, List<OrderItem> items) throws Exception {
@@ -212,5 +264,44 @@ public class PostgresDBOrderManagement implements OrderManager {
             }
         }
     }
+    @Override
+    public void deleteOrderTable() throws SQLException {
+        Connection connection = null;
+        Statement stmt = null;
+        String dropTableSQL = "DROP TABLE IF EXISTS orders CASCADE;";
+
+        try {
+            connection = basicDataSource.getConnection();
+            stmt = connection.createStatement();
+            stmt.execute(dropTableSQL);
+        } catch (SQLException e) {
+            throw e;
+        } finally {
+            if (stmt != null)
+                stmt.close();
+            if (connection != null)
+                connection.close();
+        }
+    }
+    @Override
+    public void deleteOrderItemsTable() throws SQLException {
+        Connection connection = null;
+        Statement stmt = null;
+        String dropTableSQL = "DROP TABLE IF EXISTS order_itmes CASCADE;";
+
+        try {
+            connection = basicDataSource.getConnection();
+            stmt = connection.createStatement();
+            stmt.execute(dropTableSQL);
+        } catch (SQLException e) {
+            throw e;
+        } finally {
+            if (stmt != null)
+                stmt.close();
+            if (connection != null)
+                connection.close();
+        }
+    }
+
 }
 
