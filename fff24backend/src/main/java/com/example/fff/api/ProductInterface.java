@@ -12,7 +12,6 @@ public interface ProductInterface {
 
     int getReorderQuantity();
 
-    void setReorderQuantity(int reorderQuantity);
 
     int getProductId();
     String getProductName();

@@ -108,20 +108,11 @@ public class PostgresDBProductManagement implements ProductManager {
     }
 
 
-    /**
-     * Fügt ein neues Produkt hinzu oder aktualisiert ein bestehendes Produkt.
-     * Berücksichtigt dabei den täglichen Bedarf und berechnet den Reorder Point.
-     *
-     * @param productName    Der Name des Produkts.
-     * @param productType    Der Typ des Produkts.
-     * @param quantity        Die Menge, die hinzugefügt werden soll.
-     * @return Das erstellte oder aktualisierte Produkt.
-     * @throws Exception Wenn ein Fehler auftritt.
-     */
     @Override
     public Product addProduct(String productName, String productType, int quantity) throws Exception {
-        // Initialer daily_demand ist 1000, reorder_point = 3000, reorder_quantity = 6000
-        return addProduct(productName, productType, quantity, 1000, 3000, 6000);
+        // Initialer daily_demand ist 1000
+        int initialDailyDemand = 1000;
+        return addProduct(productName, productType, quantity, initialDailyDemand, initialDailyDemand * 3); // reorderPoint = dailyDemand * 3
     }
 
     /**
@@ -132,11 +123,10 @@ public class PostgresDBProductManagement implements ProductManager {
      * @param quantity        Die Menge, die hinzugefügt werden soll.
      * @param dailyDemand     Der tägliche Bedarf.
      * @param reorderPoint    Der Reorder Point (dailyDemand * 3).
-     * @param reorderQuantity Die Menge, die nachbestellt werden soll.
      * @return Das erstellte oder aktualisierte Produkt.
      * @throws Exception Wenn ein Fehler auftritt.
      */
-    public Product addProduct(String productName, String productType, int quantity, int dailyDemand, int reorderPoint, int reorderQuantity) throws Exception {
+    public Product addProduct(String productName, String productType, int quantity, int dailyDemand, int reorderPoint) throws Exception {
         final Logger createProductLogger = Logger.getLogger("CreateProductLogger");
         createProductLogger.log(Level.INFO, "Start creating or updating product: " + productName + " with quantity " + quantity);
 
@@ -168,7 +158,7 @@ public class PostgresDBProductManagement implements ProductManager {
             }
 
             // Prüfen, ob das Produkt bereits existiert
-            String checkProductSQL = "SELECT productid, quantity, daily_demand, reorder_point, reorder_quantity FROM products WHERE productname = ? AND producttype = ?";
+            String checkProductSQL = "SELECT productid, quantity, daily_demand, reorder_point FROM products WHERE productname = ? AND producttype = ?";
             checkProductStmt = connection.prepareStatement(checkProductSQL);
             checkProductStmt.setString(1, productName);
             checkProductStmt.setString(2, productType);
@@ -178,17 +168,22 @@ public class PostgresDBProductManagement implements ProductManager {
                 // Produkt existiert bereits, Menge erhöhen und Reorder-Parameter aktualisieren
                 int productId = rs.getInt("productid");
                 int currentQuantity = rs.getInt("quantity");
+                int currentDailyDemand = rs.getInt("daily_demand");
                 rs.close();
                 checkProductStmt.close();
+
+                int newDailyDemand = (currentDailyDemand + dailyDemand) / 2; // Durchschnittlicher täglicher Bedarf
+                int newReorderPoint = newDailyDemand * 3;
+                int newReorderQuantity = newDailyDemand * 14;
 
                 int newQuantity = currentQuantity + quantity;
 
                 String updateSQL = "UPDATE products SET quantity = ?, daily_demand = ?, reorder_point = ?, reorder_quantity = ? WHERE productid = ?";
                 updateStmt = connection.prepareStatement(updateSQL);
                 updateStmt.setInt(1, newQuantity);
-                updateStmt.setInt(2, dailyDemand);
-                updateStmt.setInt(3, reorderPoint);
-                updateStmt.setInt(4, reorderQuantity);
+                updateStmt.setInt(2, newDailyDemand);
+                updateStmt.setInt(3, newReorderPoint);
+                updateStmt.setInt(4, newReorderQuantity);
                 updateStmt.setInt(5, productId);
                 int affectedRows = updateStmt.executeUpdate();
                 if (affectedRows == 0) {
@@ -197,29 +192,23 @@ public class PostgresDBProductManagement implements ProductManager {
                 }
 
                 connection.commit();
-                return new Product(productId, productName, productType, newQuantity, dailyDemand, reorderPoint, reorderQuantity);
+                return new Product(productId, productName, productType, newQuantity, newDailyDemand, newReorderPoint);
 
             } else {
+                // Produkt existiert nicht, neu anlegen
                 rs.close();
                 checkProductStmt.close();
 
-                // Produkt existiert nicht, neu anlegen
-                String insertSQL = "INSERT INTO products (productname, producttype, quantity, daily_demand, reorder_point, reorder_quantity) VALUES (?, ?, ?, ?, ?, ?)";
-                insertStmt = connection.prepareStatement(insertSQL, Statement.RETURN_GENERATED_KEYS);
+                String insertSQL = "INSERT INTO products (productname, producttype, quantity, daily_demand, reorder_point, reorder_quantity) VALUES (?, ?, ?, ?, ?, ?) RETURNING productid;";
+                insertStmt = connection.prepareStatement(insertSQL);
                 insertStmt.setString(1, productName);
                 insertStmt.setString(2, productType);
                 insertStmt.setInt(3, quantity);
                 insertStmt.setInt(4, dailyDemand);
                 insertStmt.setInt(5, reorderPoint);
-                insertStmt.setInt(6, reorderQuantity);
+                insertStmt.setInt(6, dailyDemand * 14); // reorderQuantity = dailyDemand * 14
 
-                int affectedRows = insertStmt.executeUpdate();
-                if (affectedRows == 0) {
-                    connection.rollback();
-                    throw new SQLException("Creating product failed, no rows affected.");
-                }
-
-                rs = insertStmt.getGeneratedKeys();
+                rs = insertStmt.executeQuery();
                 int generatedId = -1;
                 if (rs.next()) {
                     generatedId = rs.getInt(1);
@@ -229,7 +218,7 @@ public class PostgresDBProductManagement implements ProductManager {
                 }
 
                 connection.commit();
-                return new Product(generatedId, productName, productType, quantity, dailyDemand, reorderPoint, reorderQuantity);
+                return new Product(generatedId, productName, productType, quantity, dailyDemand, reorderPoint);
             }
 
         } catch (Exception e) {
@@ -238,21 +227,11 @@ public class PostgresDBProductManagement implements ProductManager {
             }
             throw e;
         } finally {
-            if (rs != null) {
-                try { rs.close(); } catch (SQLException e) { e.printStackTrace(); }
-            }
-            if (checkProductStmt != null) {
-                try { checkProductStmt.close(); } catch (SQLException e) { e.printStackTrace(); }
-            }
-            if (insertStmt != null) {
-                try { insertStmt.close(); } catch (SQLException e) { e.printStackTrace(); }
-            }
-            if (updateStmt != null) {
-                try { updateStmt.close(); } catch (SQLException e) { e.printStackTrace(); }
-            }
-            if (connection != null) {
-                try { connection.setAutoCommit(true); connection.close(); } catch (SQLException e) { e.printStackTrace(); }
-            }
+            if (rs != null) rs.close();
+            if (checkProductStmt != null) checkProductStmt.close();
+            if (insertStmt != null) insertStmt.close();
+            if (updateStmt != null) updateStmt.close();
+            if (connection != null) connection.close();
         }
     }
 
@@ -311,8 +290,8 @@ public class PostgresDBProductManagement implements ProductManager {
                             rs.getString("producttype"),
                             rs.getInt("quantity"),
                             rs.getInt("daily_demand"),
-                            rs.getInt("reorder_point"),
-                            rs.getInt("reorder_quantity")
+                            rs.getInt("reorder_point")
+
                     ));
                 }
             }
