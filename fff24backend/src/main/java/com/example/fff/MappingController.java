@@ -358,15 +358,15 @@
             boolean has3 = existing.stream().anyMatch(p -> p.getProductId()==3);
 
             if(!has1) {
-                productManager.addProduct("Klaus Winter", "Mit Frostschutz", 1000);
+                productManager.addProduct("Klaus Winter", "Mit Frostschutz", 20000);
             }
 
             if(!has2) {
-                productManager.addProduct("Klaus Summer", "Ohne Frostschutz", 1000);
+                productManager.addProduct("Klaus Summer", "Ohne Frostschutz", 20000);
             }
 
             if(!has3) {
-                productManager.addProduct("Klaus Extreme", "Mit Frostschutz", 1000);
+                productManager.addProduct("Klaus Extreme", "Mit Frostschutz", 20000);
             }
         }
     }
