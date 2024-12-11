@@ -182,7 +182,7 @@
             }
         }
 
-        @GetMapping("/delete-orders-table")
+        @GetMapping("/delete-orderitems-table")
         public ResponseEntity<String> deleteOrderItemsTable() {
             try {
                 orderManager.deleteOrderItemsTable();
@@ -196,7 +196,7 @@
 
         /**
          * Bestell-Endpoint: Hier kann eine Bestellung angelegt werden.
-         * Der Request-Body enthält den Kundenname und die bestellten Items.
+         * Der Request-Body enthält den Kundennamen und die bestellten Items.
          */
         @PostMapping("/order")
         public ResponseEntity<?> createOrder(@RequestBody Order orderRequest) {
