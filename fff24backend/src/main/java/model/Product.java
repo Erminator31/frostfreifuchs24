@@ -14,13 +14,16 @@ public class Product implements ProductInterface {
 
     private String productType;
 
+    private int quantity;
+
     private final Map<String, Object> additionalProperties = new HashMap<>();
 
 
-    public Product(int productId, String productName, String productType) {
+    public Product(int productId, String productName, String productType, int quantity) {
         this.productId = productId;
         this.productName = productName;
         this.productType = productType;
+        this.quantity = quantity;
     }
 
     /**
@@ -51,6 +54,16 @@ public class Product implements ProductInterface {
     @Override
     public String getProductType() {
         return productType;
+    }
+
+    @Override
+    public int getProductQuantity() {
+        return 0;
+    }
+
+    @Override
+    public void setProductQuantity(int quantity) {
+this.quantity = quantity;
     }
 
     /**

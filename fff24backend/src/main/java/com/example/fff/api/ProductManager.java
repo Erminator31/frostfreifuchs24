@@ -8,7 +8,9 @@ import java.util.List;
 public interface ProductManager {
     void createProductTable() throws Exception;
 
-    Product addProduct(String productName, String productType);
+
+    Product addProduct(String productName, String productType, int quantity);
+
     List<Product> readProducts(String productName, String productType);
 
     boolean removeProduct(int productId);

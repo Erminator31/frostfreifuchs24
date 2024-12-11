@@ -6,6 +6,9 @@ public interface ProductInterface {
     String getProductName();
     String getProductType();
 
+    int getProductQuantity();
+
+    void setProductQuantity(int quantity);
     void setProductName(String productName);
 
     void setProductType(String productType);

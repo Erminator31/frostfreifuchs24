@@ -113,7 +113,7 @@ public class PostgresDBProductManagement implements ProductManager {
      * @return The newly created Product object if the addition was successful, null otherwise.
      */
     @Override
-    public Product addProduct(String productName, String productType) {
+    public Product addProduct(String productName, String productType, int quantity) {
 
         final Logger createProductLogger = Logger.getLogger("CreateProductLogger");
         createProductLogger.log(Level.INFO, "Start creating product: " + productName);
@@ -126,12 +126,12 @@ public class PostgresDBProductManagement implements ProductManager {
             // Verbindung holen (basicDataSource sollte bereits konfiguriert sein)
             connection = basicDataSource.getConnection();
 
-            // INSERT-Statement für das Einfügen eines neuen Produkts
-            // Wir setzen RETURN_GENERATED_KEYS, um den automatisch generierten productId-Wert abzufangen
-            String insertSQL = "INSERT INTO products (productName, productType) VALUES (?, ?)";
+            // INSERT-Statement für das Einfügen eines neuen Produkts mit quantity
+            String insertSQL = "INSERT INTO products (productname, producttype, quantity) VALUES (?, ?, ?)";
             stmt = connection.prepareStatement(insertSQL, Statement.RETURN_GENERATED_KEYS);
             stmt.setString(1, productName);
             stmt.setString(2, productType);
+            stmt.setInt(3, quantity);
 
             int affectedRows = stmt.executeUpdate();
             if (affectedRows == 0) {
@@ -147,8 +147,8 @@ public class PostgresDBProductManagement implements ProductManager {
                 throw new SQLException("Creating product failed, no ID obtained.");
             }
 
-            // Neues Produktobjekt mit generierter ID zurückgeben
-            return new Product(generatedId, productName, productType);
+            // Neues Produktobjekt mit generierter ID und Quantity zurückgeben
+            return new Product(generatedId, productName, productType, quantity);
 
         } catch (SQLException e) {
             e.printStackTrace();
@@ -168,6 +168,7 @@ public class PostgresDBProductManagement implements ProductManager {
         // Falls ein Fehler auftritt, geben wir null zurück oder werfen eine RuntimeException
         return null;
     }
+
     /**
      * Retrieves a list of products based on the specified filters.
      *
@@ -217,7 +218,8 @@ public class PostgresDBProductManagement implements ProductManager {
                     products.add(new Product(
                             rs.getInt("productid"),
                             rs.getString("productname"),
-                            rs.getString("producttype")
+                            rs.getString("producttype"),
+                            rs.getInt("quantity")
                     ));
                 }
             }

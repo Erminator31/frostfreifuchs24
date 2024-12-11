@@ -98,7 +98,8 @@
             try {
                 productManager.addProduct(
                         product.getProductName(),
-                        product.getProductType()
+                        product.getProductType(),
+                        product.getProductQuantity()
                 );
 
                 Map<String, String> response = new HashMap<>();
