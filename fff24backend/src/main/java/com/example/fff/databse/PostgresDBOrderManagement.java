@@ -287,7 +287,7 @@ public class PostgresDBOrderManagement implements OrderManager {
     public void deleteOrderItemsTable() throws SQLException {
         Connection connection = null;
         Statement stmt = null;
-        String dropTableSQL = "DROP TABLE IF EXISTS order_itmes CASCADE;";
+        String dropTableSQL = "DROP TABLE IF EXISTS order_items CASCADE;";
 
         try {
             connection = basicDataSource.getConnection();
