@@ -105,68 +105,128 @@ public class PostgresDBProductManagement implements ProductManager {
     }
 
 
-    /**
-     * Adds a new product with the given product name and product type to the database.
-     *
-     * @param productName The name of the product to be added.
-     * @param productType The type of the product to be added.
-     * @return The newly created Product object if the addition was successful, null otherwise.
-     */
+
+
     @Override
-    public Product addProduct(String productName, String productType, int quantity) {
+    public Product addProduct(String productName, String productType, int quantity) throws Exception {
 
         final Logger createProductLogger = Logger.getLogger("CreateProductLogger");
-        createProductLogger.log(Level.INFO, "Start creating product: " + productName);
+        createProductLogger.log(Level.INFO, "Start creating or updating product: " + productName + " with quantity " + quantity);
 
         Connection connection = null;
-        PreparedStatement stmt = null;
+        PreparedStatement checkProductStmt = null;
+        PreparedStatement insertStmt = null;
+        PreparedStatement updateStmt = null;
+        PreparedStatement sumStmt = null;
         ResultSet rs = null;
 
         try {
-            // Verbindung holen (basicDataSource sollte bereits konfiguriert sein)
             connection = basicDataSource.getConnection();
+            connection.setAutoCommit(false);
 
-            // INSERT-Statement für das Einfügen eines neuen Produkts mit quantity
-            String insertSQL = "INSERT INTO products (productname, producttype, quantity) VALUES (?, ?, ?)";
-            stmt = connection.prepareStatement(insertSQL, Statement.RETURN_GENERATED_KEYS);
-            stmt.setString(1, productName);
-            stmt.setString(2, productType);
-            stmt.setInt(3, quantity);
-
-            int affectedRows = stmt.executeUpdate();
-            if (affectedRows == 0) {
-                throw new SQLException("Creating product failed, no rows affected.");
-            }
-
-            // Der neu generierte Schlüssel (productId) wird hier ausgelesen
-            rs = stmt.getGeneratedKeys();
-            int generatedId = -1;
+            // Aktuelle Gesamtmenge im Lager prüfen
+            String sumSQL = "SELECT COALESCE(SUM(quantity), 0) AS total_quantity FROM products";
+            sumStmt = connection.prepareStatement(sumSQL);
+            rs = sumStmt.executeQuery();
+            int currentTotalQuantity = 0;
             if (rs.next()) {
-                generatedId = rs.getInt(1);
-            } else {
-                throw new SQLException("Creating product failed, no ID obtained.");
+                currentTotalQuantity = rs.getInt("total_quantity");
+            }
+            rs.close();
+            sumStmt.close();
+
+            // Prüfen, ob durch Hinzufügen der neuen Menge die Gesamtkapazität überschritten wird
+            if (currentTotalQuantity + quantity > 20000) {
+                connection.rollback();
+                throw new Exception("Cannot add product. Adding " + quantity + " units would exceed the total warehouse capacity of 20000.");
             }
 
-            // Neues Produktobjekt mit generierter ID und Quantity zurückgeben
-            return new Product(generatedId, productName, productType, quantity);
+            // Prüfen, ob das Produkt bereits existiert
+            String checkProductSQL = "SELECT productid, quantity FROM products WHERE productname = ? AND producttype = ?";
+            checkProductStmt = connection.prepareStatement(checkProductSQL);
+            checkProductStmt.setString(1, productName);
+            checkProductStmt.setString(2, productType);
+            rs = checkProductStmt.executeQuery();
 
-        } catch (SQLException e) {
-            e.printStackTrace();
+            if (rs.next()) {
+                // Produkt existiert bereits, Menge erhöhen
+                int productId = rs.getInt("productid");
+                int currentQuantity = rs.getInt("quantity");
+                rs.close();
+                checkProductStmt.close();
+
+                int newQuantity = currentQuantity + quantity;
+
+                // Prüfe erneut Kapazität (falls sich etwas geändert hätte)
+                // Eigentlich schon oben geprüft, aber falls man pro Produkt eine Grenze möchte,
+                // könnte man hier auch noch prüfen, ob newQuantity <= 20000.
+                // In diesem Beispiel nicht notwendig, da globale Kapazität schon geprüft.
+
+                String updateSQL = "UPDATE products SET quantity = ? WHERE productid = ?";
+                updateStmt = connection.prepareStatement(updateSQL);
+                updateStmt.setInt(1, newQuantity);
+                updateStmt.setInt(2, productId);
+                int affectedRows = updateStmt.executeUpdate();
+                if (affectedRows == 0) {
+                    connection.rollback();
+                    throw new SQLException("Updating product failed, no rows affected.");
+                }
+
+                connection.commit();
+                return new Product(productId, productName, productType, newQuantity);
+
+            } else {
+                rs.close();
+                checkProductStmt.close();
+
+                // Produkt existiert nicht, neu anlegen
+                String insertSQL = "INSERT INTO products (productname, producttype, quantity) VALUES (?, ?, ?)";
+                insertStmt = connection.prepareStatement(insertSQL, Statement.RETURN_GENERATED_KEYS);
+                insertStmt.setString(1, productName);
+                insertStmt.setString(2, productType);
+                insertStmt.setInt(3, quantity);
+
+                int affectedRows = insertStmt.executeUpdate();
+                if (affectedRows == 0) {
+                    connection.rollback();
+                    throw new SQLException("Creating product failed, no rows affected.");
+                }
+
+                rs = insertStmt.getGeneratedKeys();
+                int generatedId = -1;
+                if (rs.next()) {
+                    generatedId = rs.getInt(1);
+                } else {
+                    connection.rollback();
+                    throw new SQLException("Creating product failed, no ID obtained.");
+                }
+
+                connection.commit();
+                return new Product(generatedId, productName, productType, quantity);
+            }
+
+        } catch (Exception e) {
+            if (connection != null) {
+                connection.rollback();
+            }
+            throw e;
         } finally {
-            // Ressourcen im finally-Block schließen
             if (rs != null) {
                 try { rs.close(); } catch (SQLException e) { e.printStackTrace(); }
             }
-            if (stmt != null) {
-                try { stmt.close(); } catch (SQLException e) { e.printStackTrace(); }
+            if (checkProductStmt != null) {
+                try { checkProductStmt.close(); } catch (SQLException e) { e.printStackTrace(); }
+            }
+            if (insertStmt != null) {
+                try { insertStmt.close(); } catch (SQLException e) { e.printStackTrace(); }
+            }
+            if (updateStmt != null) {
+                try { updateStmt.close(); } catch (SQLException e) { e.printStackTrace(); }
             }
             if (connection != null) {
-                try { connection.close(); } catch (SQLException e) { e.printStackTrace(); }
+                try { connection.setAutoCommit(true); connection.close(); } catch (SQLException e) { e.printStackTrace(); }
             }
         }
-
-        // Falls ein Fehler auftritt, geben wir null zurück oder werfen eine RuntimeException
-        return null;
     }
 
     /**
