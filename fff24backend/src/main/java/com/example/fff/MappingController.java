@@ -260,6 +260,9 @@
         @GetMapping("/generate-history")
         public ResponseEntity<String> generateHistoricalData() {
             try {
+
+                LOGGER.log(Level.INFO, "Creating historical data.");
+
                 ensureProductsExist();
 
                 LocalDate startDate = LocalDate.of(2023, 1, 1);
