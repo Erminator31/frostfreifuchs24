@@ -1,7 +1,10 @@
     package com.example.fff;
 
+    import com.example.fff.api.OrderManager;
     import com.example.fff.api.ProductManager;
+    import com.example.fff.databse.PostgresDBOrderManagement;
     import com.example.fff.databse.PostgresDBProductManagement;
+    import model.Order;
     import model.Product;
     import org.springframework.http.HttpStatus;
     import org.springframework.http.MediaType;
@@ -23,6 +26,7 @@
     public class MappingController {
 
         ProductManager productManager = PostgresDBProductManagement.getPostgresDBProductManagement();
+        OrderManager orderManager = PostgresDBOrderManagement.getInstance();
 
         private static final Logger LOGGER = Logger.getLogger(MappingController.class.getName());
 
@@ -90,7 +94,7 @@
          * @param productType the type of the product to filter by (optional)
          * @return ResponseEntity<List < Product>> containing the list of products meeting the specified criteria
          */
-        @GetMapping("/inventory")
+        @GetMapping("/products")
         public ResponseEntity<List<Product>> getProducts(
                 @RequestParam(value = "productName", required = false) String productName,
                 @RequestParam(value = "productType", required = false) String productType) {
@@ -115,7 +119,7 @@
          *         ResponseEntity with HTTP status 404 if the product is not found,
          *         or ResponseEntity with HTTP status 500 if an error occurs during the removal process
          */
-        @DeleteMapping("/product/{id}")
+        @DeleteMapping("/product/delete/{id}")
         public ResponseEntity<?> removeProduct(@PathVariable("id") int productId) {
             Logger.getLogger("MappingController").log(Level.INFO, "MappingController DELETE /product/" + productId);
             try {
@@ -146,4 +150,55 @@
         }
 
 
+        /**
+         * Bestell-Endpoint: Hier kann eine Bestellung angelegt werden.
+         * Der Request-Body enthält den Kundenname und die bestellten Items.
+         */
+        @PostMapping("/order")
+        public ResponseEntity<?> createOrder(@RequestBody Order orderRequest) {
+            LOGGER.log(Level.INFO, "Creating order for customer: " + orderRequest.getCustomerName());
+
+            try {
+                Order createdOrder = orderManager.createOrder(orderRequest.getCustomerName(), orderRequest.getItems());
+                return ResponseEntity.ok(createdOrder);
+            } catch (Exception e) {
+                return ResponseEntity.badRequest().body("Could not create order: " + e.getMessage());
+            }
+        }
+
+        /**
+         * Einzelne Bestellung abrufen
+         */
+        @GetMapping("/order/{id}")
+        public ResponseEntity<?> getOrder(@PathVariable("id") int orderId) {
+            try {
+                Order order = orderManager.getOrder(orderId);
+                if (order == null) {
+                    return ResponseEntity.notFound().build();
+                }
+                return ResponseEntity.ok(order);
+            } catch (Exception e) {
+                return ResponseEntity.status(500).body("Error retrieving order: " + e.getMessage());
+            }
+        }
+
+        /**
+         * Alle Bestellungen abrufen
+         */
+        @GetMapping("/orders")
+        public ResponseEntity<?> getAllOrders() {
+            try {
+                List<Order> orders = orderManager.getAllOrders();
+                if (orders.isEmpty()) {
+                    return ResponseEntity.noContent().build();
+                }
+                return ResponseEntity.ok(orders);
+            } catch (Exception e) {
+                return ResponseEntity.status(500).body("Error retrieving orders: " + e.getMessage());
+            }
+        }
+
     }
+
+
+

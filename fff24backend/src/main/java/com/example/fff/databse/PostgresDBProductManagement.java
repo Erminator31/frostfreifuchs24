@@ -87,6 +87,7 @@ public class PostgresDBProductManagement implements ProductManager {
                 + "productid SERIAL PRIMARY KEY, "
                 + "productname VARCHAR(255) NOT NULL, "
                 + "producttype VARCHAR(100) NOT NULL"
+                + "quantity INT DEFAULT NULL, "
                 + ");";
 
         try {
