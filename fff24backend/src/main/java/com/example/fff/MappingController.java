@@ -198,10 +198,10 @@ public class MappingController {
 
             ensureProductsExist();
 
-            LocalDate startDate = LocalDate.of(2023, 1, 1);
+            LocalDate startDate = LocalDate.of(2010, 1, 1);
             LocalDate endDate = LocalDate.of(2024, 11, 30);
 
-            int ausgaengeProMonat = 30;
+            int ausgaengeProMonat = 90;
 
             LocalDate current = startDate.withDayOfMonth(1);
 
