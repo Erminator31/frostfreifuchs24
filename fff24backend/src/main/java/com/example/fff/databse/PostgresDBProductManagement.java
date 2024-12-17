@@ -394,7 +394,7 @@ public class PostgresDBProductManagement implements ProductManager {
             String updateProductSQL = "UPDATE products SET daily_demand = ?, reorder_point = ?, reorder_quantity = ? WHERE productid = ?;";
             updateProductStmt = connection.prepareStatement(updateProductSQL);
 
-            PostgresDBOrderManagement orderManager = PostgresDBOrderManagement.getInstance();
+            PostgresDBWarenausgangManagement orderManager = PostgresDBWarenausgangManagement.getInstance();
 
             for (int productId : productIds) {
                 double avgDailyDemand = orderManager.calculateAverageDailyDemand(productId, connection);

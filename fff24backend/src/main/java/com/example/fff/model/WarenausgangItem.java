@@ -1,15 +1,15 @@
 package com.example.fff.model;
 
 
-import com.example.fff.api.OrderItemInterface;
+import com.example.fff.api.WarenausgangItemInterface;
 
-public class OrderItem implements OrderItemInterface{
+public class WarenausgangItem implements WarenausgangItemInterface {
     private int productId;
     private int quantity;
 
-    public OrderItem() {}
+    public WarenausgangItem() {}
 
-    public OrderItem(int productId, int quantity) {
+    public WarenausgangItem(int productId, int quantity) {
         this.productId = productId;
         this.quantity = quantity;
     }
