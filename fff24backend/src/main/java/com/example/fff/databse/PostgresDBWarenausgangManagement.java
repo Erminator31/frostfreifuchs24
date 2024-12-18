@@ -1,12 +1,15 @@
 package com.example.fff.databse;
 
 import com.example.fff.api.WarenausgangManager;
+import com.example.fff.api.WareneingangManager;
 import com.example.fff.model.Warenausgang;
 import com.example.fff.model.WarenausgangItem;
+import com.example.fff.model.WareneingangItem;
 import org.apache.commons.dbcp.BasicDataSource;
 
 import java.sql.*;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.logging.Logger;
 
@@ -38,52 +41,34 @@ public class PostgresDBWarenausgangManagement implements WarenausgangManager {
 
     @Override
     public void createWarenausgangTable() throws Exception {
-        Connection connection = null;
-        PreparedStatement pstmt = null;
-        String createTableSQL = "CREATE TABLE IF NOT EXISTS warenausgaenge ("
-                + "warenausgangid SERIAL PRIMARY KEY, "
-                + "warenausgangdate TIMESTAMP NOT NULL DEFAULT NOW(), "
-                + "quantity INT DEFAULT NULL "
-                + ");";
-
-        try {
-            connection = basicDataSource.getConnection();
-            pstmt = connection.prepareStatement(createTableSQL);
+        try (Connection connection = basicDataSource.getConnection();
+             PreparedStatement pstmt = connection.prepareStatement(
+                     "CREATE TABLE IF NOT EXISTS warenausgaenge (" +
+                             "warenausgangid SERIAL PRIMARY KEY, " +
+                             "warenausgangdate TIMESTAMP NOT NULL DEFAULT NOW(), " +
+                             "quantity INT DEFAULT NULL " +
+                             ");")) {
             pstmt.execute();
         } catch (SQLException e) {
             throw new Exception("Error creating warenausgaenge table", e);
-        } finally {
-            if (pstmt != null)
-                pstmt.close();
-            if (connection != null)
-                connection.close();
         }
     }
 
     @Override
     public void createWarenausgangItemTable() throws Exception {
-        Connection connection = null;
-        PreparedStatement pstmt = null;
-        String createTableSQL = "CREATE TABLE IF NOT EXISTS warenausgang_items ("
-                + "warenausgangitemid SERIAL PRIMARY KEY, "
-                + "warenausgangid INT NOT NULL, "
-                + "productid INT NOT NULL, "
-                + "quantity INT DEFAULT NULL, "
-                + "FOREIGN KEY (warenausgangid) REFERENCES warenausgaenge(warenausgangid) ON DELETE CASCADE, "
-                + "FOREIGN KEY (productid) REFERENCES products(productid) ON DELETE CASCADE "
-                + ");";
-
-        try {
-            connection = basicDataSource.getConnection();
-            pstmt = connection.prepareStatement(createTableSQL);
+        try (Connection connection = basicDataSource.getConnection();
+             PreparedStatement pstmt = connection.prepareStatement(
+                     "CREATE TABLE IF NOT EXISTS warenausgang_items (" +
+                             "warenausgangitemid SERIAL PRIMARY KEY, " +
+                             "warenausgangid INT NOT NULL, " +
+                             "productid INT NOT NULL, " +
+                             "quantity INT DEFAULT NULL, " +
+                             "FOREIGN KEY (warenausgangid) REFERENCES warenausgaenge(warenausgangid) ON DELETE CASCADE, " +
+                             "FOREIGN KEY (productid) REFERENCES products(productid) ON DELETE CASCADE " +
+                             ");")) {
             pstmt.execute();
         } catch (SQLException e) {
             throw new Exception("Error creating warenausgang_items table", e);
-        } finally {
-            if (pstmt != null)
-                pstmt.close();
-            if (connection != null)
-                connection.close();
         }
     }
 
@@ -98,7 +83,6 @@ public class PostgresDBWarenausgangManagement implements WarenausgangManager {
         PreparedStatement warenausgangStmt = null;
         PreparedStatement warenausgangItemStmt = null;
         PreparedStatement updateProductStmt = null;
-        PreparedStatement checkDemandStmt = null;
         PreparedStatement updateReorderStmt = null;
         ResultSet rs = null;
 
@@ -106,7 +90,7 @@ public class PostgresDBWarenausgangManagement implements WarenausgangManager {
             connection = basicDataSource.getConnection();
             connection.setAutoCommit(false);
 
-            // Warenausgang anlegen
+            // Insert Warenausgang
             String insertWarenausgangSQL = "INSERT INTO warenausgaenge (warenausgangdate) VALUES (?) RETURNING warenausgangid, warenausgangdate";
             warenausgangStmt = connection.prepareStatement(insertWarenausgangSQL);
             warenausgangStmt.setTimestamp(1, warenausgangDate);
@@ -131,44 +115,43 @@ public class PostgresDBWarenausgangManagement implements WarenausgangManager {
             updateProductStmt = connection.prepareStatement(updateProductSQL);
 
             for (WarenausgangItem item : items) {
-                // Produktbestand prüfen
-                PreparedStatement ps = connection.prepareStatement(selectProductSQL);
-                ps.setInt(1, item.getProductId());
-                ResultSet productRs = ps.executeQuery();
+                // Check product stock
+                try (PreparedStatement ps = connection.prepareStatement(selectProductSQL)) {
+                    ps.setInt(1, item.getProductId());
+                    try (ResultSet productRs = ps.executeQuery()) {
+                        if (!productRs.next()) {
+                            throw new Exception("Product not found: " + item.getProductId());
+                        }
 
-                if (!productRs.next()) {
-                    throw new Exception("Product not found: " + item.getProductId());
+                        int currentStock = productRs.getInt("quantity");
+                        int dailyDemand = productRs.getInt("daily_demand");
+                        int reorderPoint = productRs.getInt("reorder_point");
+                        int reorderQuantity = productRs.getInt("reorder_quantity");
+
+                        if (item.getQuantity() > currentStock) {
+                            throw new Exception("Not enough stock for productId: " + item.getProductId());
+                        }
+
+                        // Insert Warenausgang Item
+                        warenausgangItemStmt.setInt(1, newWarenausgangId);
+                        warenausgangItemStmt.setInt(2, item.getProductId());
+                        warenausgangItemStmt.setInt(3, item.getQuantity());
+                        warenausgangItemStmt.addBatch();
+
+                        // Reduce stock
+                        updateProductStmt.setInt(1, item.getQuantity());
+                        updateProductStmt.setInt(2, dailyDemand);
+                        updateProductStmt.setInt(3, reorderPoint);
+                        updateProductStmt.setInt(4, item.getProductId());
+                        updateProductStmt.addBatch();
+                    }
                 }
-
-                int currentStock = productRs.getInt("quantity");
-                int dailyDemand = productRs.getInt("daily_demand");
-                int reorderPoint = productRs.getInt("reorder_point");
-                int reorderQuantity = productRs.getInt("reorder_quantity");
-                productRs.close();
-                ps.close();
-
-                if (item.getQuantity() > currentStock) {
-                    throw new Exception("Not enough stock for productId: " + item.getProductId());
-                }
-
-                // Warenausgang Item einfügen
-                warenausgangItemStmt.setInt(1, newWarenausgangId);
-                warenausgangItemStmt.setInt(2, item.getProductId());
-                warenausgangItemStmt.setInt(3, item.getQuantity());
-                warenausgangItemStmt.addBatch();
-
-                // Bestand reduzieren
-                updateProductStmt.setInt(1, item.getQuantity());
-                updateProductStmt.setInt(2, dailyDemand); // Kann später an Bedarf angepasst werden
-                updateProductStmt.setInt(3, reorderPoint);
-                updateProductStmt.setInt(4, item.getProductId());
-                updateProductStmt.addBatch();
             }
 
             warenausgangItemStmt.executeBatch();
             updateProductStmt.executeBatch();
 
-            // Durchschnittlichen Bedarf berechnen und Reorder Point aktualisieren
+            // Update daily demand and reorder point for each product
             for (WarenausgangItem item : items) {
                 double averageDailyDemand = calculateAverageDailyDemand(item.getProductId(), connection);
 
@@ -180,32 +163,27 @@ public class PostgresDBWarenausgangManagement implements WarenausgangManager {
                 updateReorderStmt.executeUpdate();
                 updateReorderStmt.close();
 
-                // Überprüfen, ob Bestand unter den Reorder Point gefallen ist
+                // Check if we need to restock (if currentQty < averageDailyDemand * 7)
                 String checkReorderSQL = "SELECT quantity, reorder_quantity FROM products WHERE productid = ?";
-                PreparedStatement psCheck = connection.prepareStatement(checkReorderSQL);
-                psCheck.setInt(1, item.getProductId());
-                ResultSet reorderRs = psCheck.executeQuery();
+                try (PreparedStatement psCheck = connection.prepareStatement(checkReorderSQL)) {
+                    psCheck.setInt(1, item.getProductId());
+                    try (ResultSet reorderRs = psCheck.executeQuery()) {
+                        if (reorderRs.next()) {
+                            int currentQty = reorderRs.getInt("quantity");
+                            int reorderQty = reorderRs.getInt("reorder_quantity");
 
-                if (reorderRs.next()) {
-                    int currentQty = reorderRs.getInt("quantity");
-                    int reorderQty = reorderRs.getInt("reorder_quantity");
-
-                    if (currentQty < averageDailyDemand * 7) {
-                        // Nachbestellen (Wareneingang verbuchen)
-                        String restockSQL = "UPDATE products SET quantity = quantity + ? WHERE productid = ?";
-                        PreparedStatement psRestock = connection.prepareStatement(restockSQL);
-                        psRestock.setInt(1, reorderQty);
-                        psRestock.setInt(2, item.getProductId());
-                        psRestock.executeUpdate();
-                        psRestock.close();
+                            if (currentQty < averageDailyDemand * 7) {
+                                // Trigger a wareneingang using WareneingangManager
+                                WareneingangManager wareneingangManager = PostgresDBWareneingangManagement.getInstance();
+                                List<WareneingangItem> eingangItems = Arrays.asList(new WareneingangItem(item.getProductId(), reorderQty));
+                                wareneingangManager.createWareneingang(eingangItems);
+                            }
+                        }
                     }
                 }
-                reorderRs.close();
-                psCheck.close();
             }
 
             connection.commit();
-
             return new Warenausgang(newWarenausgangId, returnedDate.toString(), items);
 
         } catch (Exception e) {
@@ -218,7 +196,6 @@ public class PostgresDBWarenausgangManagement implements WarenausgangManager {
             if (warenausgangStmt != null) warenausgangStmt.close();
             if (warenausgangItemStmt != null) warenausgangItemStmt.close();
             if (updateProductStmt != null) updateProductStmt.close();
-            if (checkDemandStmt != null) checkDemandStmt.close();
             if (updateReorderStmt != null) updateReorderStmt.close();
             if (connection != null) connection.close();
         }
@@ -226,114 +203,65 @@ public class PostgresDBWarenausgangManagement implements WarenausgangManager {
 
     @Override
     public Warenausgang getWarenausgang(int warenausgangId) throws Exception {
-        Connection connection = null;
-        PreparedStatement stmt = null;
-        PreparedStatement itemStmt = null;
-        ResultSet rs = null;
-
-        try {
-            connection = basicDataSource.getConnection();
-
+        try (Connection connection = basicDataSource.getConnection()) {
             String selectWarenausgangSQL = "SELECT warenausgangid, warenausgangdate FROM warenausgaenge WHERE warenausgangid = ?";
-            stmt = connection.prepareStatement(selectWarenausgangSQL);
-            stmt.setInt(1, warenausgangId);
-            rs = stmt.executeQuery();
+            try (PreparedStatement stmt = connection.prepareStatement(selectWarenausgangSQL)) {
+                stmt.setInt(1, warenausgangId);
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (!rs.next()) {
+                        return null;
+                    }
 
-            if (!rs.next()) {
-                return null;
-            }
+                    int wId = rs.getInt("warenausgangid");
+                    String warenausgangDate = rs.getString("warenausgangdate");
 
-            int wId = rs.getInt("warenausgangid");
-            String warenausgangDate = rs.getString("warenausgangdate");
-
-            // Items holen
-            String selectItemsSQL = "SELECT productid, quantity FROM warenausgang_items WHERE warenausgangid = ?";
-            itemStmt = connection.prepareStatement(selectItemsSQL);
-            itemStmt.setInt(1, wId);
-            try (ResultSet itemRS = itemStmt.executeQuery()) {
-                List<WarenausgangItem> items = new ArrayList<>();
-                while (itemRS.next()) {
-                    items.add(new WarenausgangItem(itemRS.getInt("productid"), itemRS.getInt("quantity")));
+                    String selectItemsSQL = "SELECT productid, quantity FROM warenausgang_items WHERE warenausgangid = ?";
+                    try (PreparedStatement itemStmt = connection.prepareStatement(selectItemsSQL)) {
+                        itemStmt.setInt(1, wId);
+                        try (ResultSet itemRS = itemStmt.executeQuery()) {
+                            List<WarenausgangItem> items = new ArrayList<>();
+                            while (itemRS.next()) {
+                                items.add(new WarenausgangItem(itemRS.getInt("productid"), itemRS.getInt("quantity")));
+                            }
+                            return new Warenausgang(wId, warenausgangDate, items);
+                        }
+                    }
                 }
-                return new Warenausgang(wId, warenausgangDate, items);
             }
-
-        } finally {
-            if (rs != null) rs.close();
-            if (stmt != null) stmt.close();
-            if (itemStmt != null) itemStmt.close();
-            if (connection != null) connection.close();
         }
     }
 
     @Override
     public List<Warenausgang> getAllWarenausgaenge() throws Exception {
-        Connection connection = null;
-        PreparedStatement stmt = null;
-        ResultSet rs = null;
         List<Warenausgang> warenausgaenge = new ArrayList<>();
-
-        try {
-            connection = basicDataSource.getConnection();
-            String selectSQL = "SELECT warenausgangid, warenausgangdate FROM warenausgaenge";
-            stmt = connection.prepareStatement(selectSQL);
-            rs = stmt.executeQuery();
+        try (Connection connection = basicDataSource.getConnection();
+             PreparedStatement stmt = connection.prepareStatement("SELECT warenausgangid FROM warenausgaenge");
+             ResultSet rs = stmt.executeQuery()) {
 
             while (rs.next()) {
                 int warenausgangId = rs.getInt("warenausgangid");
-                // Items holen über getWarenausgang()
                 Warenausgang w = getWarenausgang(warenausgangId);
                 if (w != null) {
                     warenausgaenge.add(w);
                 }
             }
-
-            return warenausgaenge;
-
-        } finally {
-            if (rs != null) rs.close();
-            if (stmt != null) stmt.close();
-            if (connection != null) connection.close();
         }
+        return warenausgaenge;
     }
 
     @Override
     public void deleteWarenausgangTable() throws SQLException {
-        Connection connection = null;
-        Statement stmt = null;
-        String dropTableSQL = "DROP TABLE IF EXISTS warenausgaenge CASCADE;";
-
-        try {
-            connection = basicDataSource.getConnection();
-            stmt = connection.createStatement();
-            stmt.execute(dropTableSQL);
-        } catch (SQLException e) {
-            throw e;
-        } finally {
-            if (stmt != null)
-                stmt.close();
-            if (connection != null)
-                connection.close();
+        try (Connection connection = basicDataSource.getConnection();
+             Statement stmt = connection.createStatement()) {
+            stmt.execute("DROP TABLE IF EXISTS warenausgaenge CASCADE;");
         }
     }
 
     @Override
     public void deleteWarenausgangItemsTable() throws SQLException {
-        Connection connection = null;
-        Statement stmt = null;
-        String dropTableSQL = "DROP TABLE IF EXISTS warenausgang_items CASCADE;";
-
-        try {
-            connection = basicDataSource.getConnection();
-            stmt = connection.createStatement();
-            stmt.execute(dropTableSQL);
-        } catch (SQLException e) {
-            throw e;
-        } finally {
-            if (stmt != null)
-                stmt.close();
-            if (connection != null)
-                connection.close();
+        try (Connection connection = basicDataSource.getConnection();
+             Statement stmt = connection.createStatement()) {
+            stmt.execute("DROP TABLE IF EXISTS warenausgang_items CASCADE;");
         }
     }
 
@@ -364,7 +292,6 @@ public class PostgresDBWarenausgangManagement implements WarenausgangManager {
             return 0.0;
         }
 
-        // Zeitraum zwischen ältester und neuester Warenausgang
         Timestamp oldest = ausgangDates.get(ausgangDates.size() - 1);
         Timestamp newest = ausgangDates.get(0);
         long milliseconds = newest.getTime() - oldest.getTime();
