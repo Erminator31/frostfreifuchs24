@@ -201,57 +201,79 @@
 
                 ensureProductsExist();
 
-                LocalDate startDate = LocalDate.of(2021, 1, 1);
+                LocalDate startDate = LocalDate.of(2023, 1, 1);
                 LocalDate endDate = LocalDate.of(2024, 11, 30);
 
+                // Number of Warenausgänge per month
                 int ausgaengeProMonat = 60;
 
+                // Start from the first of the start month
                 LocalDate current = startDate.withDayOfMonth(1);
 
                 while (!current.isAfter(endDate)) {
                     int m = current.getMonthValue();
-                    double p1, p2, p3; // Wahrscheinlichkeiten für Produkt 1, 2, 3
+                    double p1, p2, p3;
                     if (m == 12 || m == 1 || m == 2) {
                         // Winter
                         p1 = 0.4; p2 = 0.2; p3 = 0.4;
                     } else if (m >= 3 && m <= 5) {
-                        // Frühling
+                        // Spring
                         p1 = 0.3; p2 = 0.5; p3 = 0.2;
                     } else if (m >= 6 && m <= 8) {
-                        // Sommer
+                        // Summer
                         p1 = 0.1; p2 = 0.7; p3 = 0.2;
                     } else {
-                        // Herbst (9,10,11)
+                        // Autumn (9,10,11)
                         p1 = 0.3; p2 = 0.3; p3 = 0.4;
                     }
 
                     int lengthOfMonth = current.lengthOfMonth();
 
                     for (int i = 0; i < ausgaengeProMonat; i++) {
+                        // Generate 2 WarenausgangItems, each randomly favoring product 1,2,3
                         List<WarenausgangItem> items = new ArrayList<>();
                         items.add(generateWarenausgangItemWithSeason(p1, p2, p3));
                         items.add(generateWarenausgangItemWithSeason(p1, p2, p3));
 
-                        // Zufälliges Datum im aktuellen Monat
+                        // Pick a random day in this month
                         int randomDay = ThreadLocalRandom.current().nextInt(1, lengthOfMonth + 1);
                         LocalDate randomDate = current.withDayOfMonth(randomDay);
 
-                        // Zufällige Uhrzeit zwischen 8 und 17 Uhr
+                        // Random time between 8:00 and 17:59
                         int randomHour = ThreadLocalRandom.current().nextInt(8, 18);
                         int randomMinute = ThreadLocalRandom.current().nextInt(0, 60);
 
-                        LocalDateTime warenausgangDateTime = LocalDateTime.of(randomDate.getYear(),
+                        LocalDateTime warenausgangDateTime = LocalDateTime.of(
+                                randomDate.getYear(),
                                 randomDate.getMonthValue(),
                                 randomDate.getDayOfMonth(),
                                 randomHour,
-                                randomMinute);
-
+                                randomMinute
+                        );
                         Timestamp warenausgangTimestamp = Timestamp.valueOf(warenausgangDateTime);
 
-                        // Warenausgang erstellen
-                        warenausgangManager.createWarenausgang(items, warenausgangTimestamp);
-                    }
+                        // Create Warenausgang
+                        Warenausgang createdWarenausgang = warenausgangManager.createWarenausgang(items, warenausgangTimestamp);
 
+                        // After creating Warenausgang, check each product involved and create Wareneingang if below reorderPoint
+                        for (WarenausgangItem item : items) {
+                            Product updatedProduct = getProductById(item.getProductId());
+                            if (updatedProduct != null
+                                    && updatedProduct.getProductQuantity() < updatedProduct.getReorderPoint()) {
+
+                                // Create a Wareneingang with the same timestamp
+                                WareneingangItem wareneingangItem = new WareneingangItem(
+                                        updatedProduct.getProductId(),
+                                        updatedProduct.getReorderQuantity()  // or any other logic for quantity
+                                );
+
+                                wareneingangManager.createWareneingang(
+                                        Collections.singletonList(wareneingangItem),
+                                        warenausgangTimestamp
+                                );
+                            }
+                        }
+                    }
                     current = current.plusMonths(1);
                 }
 
@@ -262,6 +284,17 @@
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                         .body("Error generating historical data: " + e.getMessage());
             }
+        }
+
+        private Product getProductById(int productId) {
+
+            List<Product> allProducts = productManager.readProducts(null, null);
+            for (Product p : allProducts) {
+                if (p.getProductId() == productId) {
+                    return p;
+                }
+            }
+            return null;
         }
 
         private WarenausgangItem generateWarenausgangItemWithSeason(double p1, double p2, double p3) {
