@@ -6,10 +6,7 @@
     import com.example.fff.databse.PostgresDBProductManagement;
     import com.example.fff.databse.PostgresDBWarenausgangManagement;
     import com.example.fff.databse.PostgresDBWareneingangManagement;
-    import com.example.fff.model.Product;
-    import com.example.fff.model.Warenausgang;
-    import com.example.fff.model.WarenausgangItem;
-    import com.example.fff.model.Wareneingang;
+    import com.example.fff.model.*;
     import org.springframework.http.HttpStatus;
     import org.springframework.http.MediaType;
     import org.springframework.http.ResponseEntity;
