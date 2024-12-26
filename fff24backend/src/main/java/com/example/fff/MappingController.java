@@ -287,7 +287,8 @@
         }
 
         private Product getProductById(int productId) {
-
+            // If you have or prefer to add a dedicated query for a single product, do so;
+            // otherwise we fetch all and filter in-memory:
             List<Product> allProducts = productManager.readProducts(null, null);
             for (Product p : allProducts) {
                 if (p.getProductId() == productId) {
