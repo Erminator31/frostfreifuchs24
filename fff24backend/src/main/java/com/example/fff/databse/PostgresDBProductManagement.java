@@ -3,6 +3,7 @@
     import com.example.fff.api.ProductManager;
     import com.example.fff.model.Product;
     import org.apache.commons.dbcp.BasicDataSource;
+    import org.springframework.stereotype.Service;
 
     import java.sql.*;
     import java.util.ArrayList;
@@ -10,6 +11,7 @@
     import java.util.logging.Level;
     import java.util.logging.Logger;
 
+    @Service
     public class PostgresDBProductManagement implements ProductManager {
         // Database connection details
     // Database connection details

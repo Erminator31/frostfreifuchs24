@@ -6,6 +6,7 @@ import com.example.fff.model.Warenausgang;
 import com.example.fff.model.WarenausgangItem;
 import com.example.fff.model.WareneingangItem;
 import org.apache.commons.dbcp.BasicDataSource;
+import org.springframework.stereotype.Service;
 
 import java.sql.*;
 import java.util.ArrayList;
@@ -13,6 +14,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.logging.Logger;
 
+@Service
 public class PostgresDBWarenausgangManagement implements WarenausgangManager {
 
     String databaseURL = "jdbc:postgresql://c7u1tn6bvvsodf.cluster-czz5s0kz4scl.eu-west-1.rds.amazonaws.com:5432/d1t207hd56v54?sslmode=require";
