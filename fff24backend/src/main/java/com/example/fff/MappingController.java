@@ -214,7 +214,7 @@
                 LocalDate endOfMonth = startOfMonth.withDayOfMonth(startOfMonth.lengthOfMonth());
 
                 // You can tweak how many Warenausgänge to generate per month
-                int ausgaengeProMonat = 20;
+                int ausgaengeProMonat = 30;
 
                 // Process the chunk
                 generateWarenausgaengeForDateRange(startOfMonth, endOfMonth, ausgaengeProMonat);
@@ -335,8 +335,8 @@
                 productId = 3;
             }
 
-            // Menge zwischen 5 und 20
-            int quantity = 5 + ThreadLocalRandom.current().nextInt(0, 16);
+            // Menge zwischen 5 und 100
+            int quantity = 5 + ThreadLocalRandom.current().nextInt(0, 100);
             return new WarenausgangItem(productId, quantity);
         }
 
