@@ -107,6 +107,29 @@
             }
         }
 
+        @Override
+        public Product readProductById(int productId) throws SQLException {
+            String sql = "SELECT productid, productname, producttype, quantity, daily_demand, reorder_point FROM products WHERE productid = ?";
+
+            try (Connection connection = basicDataSource.getConnection();
+                 PreparedStatement stmt = connection.prepareStatement(sql)) {
+                stmt.setInt(1, productId);
+
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        return new Product(
+                                rs.getInt("productid"),
+                                rs.getString("productname"),
+                                rs.getString("producttype"),
+                                rs.getInt("quantity"),
+                                rs.getInt("daily_demand"),
+                                rs.getInt("reorder_point")
+                        );
+                    }
+                }
+            }
+            return null;
+        }
 
         @Override
         public Product addProduct(String productName, String productType, int quantity) throws Exception {

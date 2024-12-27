@@ -12,6 +12,7 @@
     import org.springframework.http.ResponseEntity;
     import org.springframework.web.bind.annotation.*;
 
+    import java.sql.SQLException;
     import java.sql.Timestamp;
     import java.time.LocalDate;
     import java.time.LocalDateTime;
@@ -313,16 +314,14 @@
 
 
         private Product getProductById(int productId) {
-            // If you have or prefer to add a dedicated query for a single product, do so;
-            // otherwise we fetch all and filter in-memory:
-            List<Product> allProducts = productManager.readProducts(null, null);
-            for (Product p : allProducts) {
-                if (p.getProductId() == productId) {
-                    return p;
-                }
+            try {
+                return productManager.readProductById(productId);
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return null;
             }
-            return null;
         }
+
 
         private WarenausgangItem generateWarenausgangItemWithSeason(double p1, double p2, double p3) {
             double rnd = Math.random();

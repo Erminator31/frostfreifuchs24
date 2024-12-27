@@ -9,7 +9,7 @@ public interface ProductManager {
     void createProductTable() throws Exception;
 
 
-
+    Product readProductById(int productId) throws SQLException;
 
     Product addProduct(String productName, String productType, int quantity) throws Exception;
 
