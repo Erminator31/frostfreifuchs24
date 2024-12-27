@@ -192,89 +192,38 @@
         }
 
         @GetMapping("/generate-history")
-        public ResponseEntity<String> generateHistoricalData() {
+        public ResponseEntity<String> generateHistoricalData(
+                @RequestParam(name = "year", required = false) Integer year,
+                @RequestParam(name = "month", required = false) Integer month) {
             try {
-                LOGGER.log(Level.INFO, "Creating historical warenausgang data.");
+                LOGGER.log(Level.INFO, "Creating historical warenausgang data in chunks.");
 
+                // Make sure we have at least 3 products available:
                 ensureProductsExist();
 
-                LocalDate startDate = LocalDate.of(2023, 1, 1);
-                LocalDate endDate = LocalDate.of(2024, 11, 30);
-
-                // Number of Warenausgänge per month
-                int ausgaengeProMonat = 60;
-
-                // Start from the first of the start month
-                LocalDate current = startDate.withDayOfMonth(1);
-
-                while (!current.isAfter(endDate)) {
-                    int m = current.getMonthValue();
-                    double p1, p2, p3;
-                    if (m == 12 || m == 1 || m == 2) {
-                        // Winter
-                        p1 = 0.4; p2 = 0.2; p3 = 0.4;
-                    } else if (m >= 3 && m <= 5) {
-                        // Spring
-                        p1 = 0.3; p2 = 0.5; p3 = 0.2;
-                    } else if (m >= 6 && m <= 8) {
-                        // Summer
-                        p1 = 0.1; p2 = 0.7; p3 = 0.2;
-                    } else {
-                        // Autumn (9,10,11)
-                        p1 = 0.3; p2 = 0.3; p3 = 0.4;
-                    }
-
-                    int lengthOfMonth = current.lengthOfMonth();
-
-                    for (int i = 0; i < ausgaengeProMonat; i++) {
-                        // Generate 2 WarenausgangItems, each randomly favoring product 1,2,3
-                        List<WarenausgangItem> items = new ArrayList<>();
-                        items.add(generateWarenausgangItemWithSeason(p1, p2, p3));
-                        items.add(generateWarenausgangItemWithSeason(p1, p2, p3));
-
-                        // Pick a random day in this month
-                        int randomDay = ThreadLocalRandom.current().nextInt(1, lengthOfMonth + 1);
-                        LocalDate randomDate = current.withDayOfMonth(randomDay);
-
-                        // Random time between 8:00 and 17:59
-                        int randomHour = ThreadLocalRandom.current().nextInt(8, 18);
-                        int randomMinute = ThreadLocalRandom.current().nextInt(0, 60);
-
-                        LocalDateTime warenausgangDateTime = LocalDateTime.of(
-                                randomDate.getYear(),
-                                randomDate.getMonthValue(),
-                                randomDate.getDayOfMonth(),
-                                randomHour,
-                                randomMinute
-                        );
-                        Timestamp warenausgangTimestamp = Timestamp.valueOf(warenausgangDateTime);
-
-                        // Create Warenausgang
-                        Warenausgang createdWarenausgang = warenausgangManager.createWarenausgang(items, warenausgangTimestamp);
-
-                        // After creating Warenausgang, check each product involved and create Wareneingang if below reorderPoint
-                        for (WarenausgangItem item : items) {
-                            Product updatedProduct = getProductById(item.getProductId());
-                            if (updatedProduct != null
-                                    && updatedProduct.getProductQuantity() < updatedProduct.getReorderPoint()) {
-
-                                // Create a Wareneingang with the same timestamp
-                                WareneingangItem wareneingangItem = new WareneingangItem(
-                                        updatedProduct.getProductId(),
-                                        updatedProduct.getReorderQuantity()  // or any other logic for quantity
-                                );
-
-                                wareneingangManager.createWareneingang(
-                                        Collections.singletonList(wareneingangItem),
-                                        warenausgangTimestamp
-                                );
-                            }
-                        }
-                    }
-                    current = current.plusMonths(1);
+                // If the caller didn't provide year or month, or provided invalid values, pick smaller defaults.
+                if (year == null || year < 2020) {
+                    year = 2024;
+                }
+                if (month == null || month < 1 || month > 12) {
+                    month = 1;
                 }
 
-                return ResponseEntity.ok("Historical data generated successfully.");
+                // We'll just generate one month’s worth of data at a time.
+                LocalDate startOfMonth = LocalDate.of(year, month, 1);
+                LocalDate endOfMonth = startOfMonth.withDayOfMonth(startOfMonth.lengthOfMonth());
+
+                // You can tweak how many Warenausgänge to generate per month
+                int ausgaengeProMonat = 20;
+
+                // Process the chunk
+                generateWarenausgaengeForDateRange(startOfMonth, endOfMonth, ausgaengeProMonat);
+
+                String successMsg = String.format(
+                        "Historical data generated successfully for %d-%02d (Warenausgänge: %d).",
+                        year, month, ausgaengeProMonat
+                );
+                return ResponseEntity.ok(successMsg);
 
             } catch (Exception e) {
                 e.printStackTrace();
@@ -282,6 +231,86 @@
                         .body("Error generating historical data: " + e.getMessage());
             }
         }
+
+        private void generateWarenausgaengeForDateRange(
+                LocalDate startDate,
+                LocalDate endDate,
+                int ausgaengeProMonat
+        ) throws Exception {
+
+            // Move "current" to the start of the given month (or date range)
+            LocalDate current = startDate;
+
+            while (!current.isAfter(endDate)) {
+                int m = current.getMonthValue();
+                double p1, p2, p3; // Seasonal probabilities
+                if (m == 12 || m == 1 || m == 2) {
+                    // Winter
+                    p1 = 0.4; p2 = 0.2; p3 = 0.4;
+                } else if (m >= 3 && m <= 5) {
+                    // Spring
+                    p1 = 0.3; p2 = 0.5; p3 = 0.2;
+                } else if (m >= 6 && m <= 8) {
+                    // Summer
+                    p1 = 0.1; p2 = 0.7; p3 = 0.2;
+                } else {
+                    // Autumn (9,10,11)
+                    p1 = 0.3; p2 = 0.3; p3 = 0.4;
+                }
+
+                int lengthOfMonth = current.lengthOfMonth();
+
+                // Generate X Warenausgänge for this month
+                for (int i = 0; i < ausgaengeProMonat; i++) {
+                    // Each Warenausgang has 2 randomly chosen product items
+                    List<WarenausgangItem> items = new ArrayList<>();
+                    items.add(generateWarenausgangItemWithSeason(p1, p2, p3));
+                    items.add(generateWarenausgangItemWithSeason(p1, p2, p3));
+
+                    // Pick a random day in [1..lengthOfMonth]
+                    int randomDay = ThreadLocalRandom.current().nextInt(1, lengthOfMonth + 1);
+                    LocalDate randomDate = current.withDayOfMonth(randomDay);
+
+                    // Random hour [8..17], random minute [0..59]
+                    int randomHour = ThreadLocalRandom.current().nextInt(8, 18);
+                    int randomMinute = ThreadLocalRandom.current().nextInt(0, 60);
+
+                    LocalDateTime warenausgangDateTime = LocalDateTime.of(
+                            randomDate.getYear(),
+                            randomDate.getMonthValue(),
+                            randomDate.getDayOfMonth(),
+                            randomHour,
+                            randomMinute
+                    );
+                    Timestamp warenausgangTimestamp = Timestamp.valueOf(warenausgangDateTime);
+
+                    // Create the Warenausgang
+                    Warenausgang createdWarenausgang = warenausgangManager
+                            .createWarenausgang(items, warenausgangTimestamp);
+
+                    // Check if the product quantity is below reorderPoint. If so, create Wareneingang
+                    for (WarenausgangItem item : items) {
+                        Product updatedProduct = getProductById(item.getProductId());
+                        if (updatedProduct != null
+                                && updatedProduct.getProductQuantity() < updatedProduct.getReorderPoint()) {
+
+                            WareneingangItem wareneingangItem = new WareneingangItem(
+                                    updatedProduct.getProductId(),
+                                    updatedProduct.getReorderQuantity()
+                            );
+                            // Create Wareneingang with the same timestamp to replenish
+                            wareneingangManager.createWareneingang(
+                                    Collections.singletonList(wareneingangItem),
+                                    warenausgangTimestamp
+                            );
+                        }
+                    }
+                }
+                // Move on to next month if you want multiple months in the same call
+                current = current.plusMonths(1);
+            }
+        }
+
 
         private Product getProductById(int productId) {
             // If you have or prefer to add a dedicated query for a single product, do so;
