@@ -89,27 +89,28 @@ public class AsyncHistoryService {
     }
 
     private void generateWarenausgaengeForMonth(int year, int month, int ausgaengeProMonat) throws Exception {
+        LOGGER.log(Level.INFO, "Start generating Warenausgaenge for {0}-{1}, count={2}",
+                new Object[] { year, month, ausgaengeProMonat });
+
         LocalDate startOfMonth = LocalDate.of(year, month, 1);
         int lengthOfMonth = startOfMonth.lengthOfMonth();
 
-        // We'll do minimal seasonal logic for brevity
+        // Seasonal probabilities...
         double p1, p2, p3;
         if (month == 12 || month == 1 || month == 2) {
-            // Winter
             p1 = 0.4; p2 = 0.2; p3 = 0.4;
         } else if (month >= 3 && month <= 5) {
-            // Spring
             p1 = 0.3; p2 = 0.5; p3 = 0.2;
         } else if (month >= 6 && month <= 8) {
-            // Summer
             p1 = 0.1; p2 = 0.7; p3 = 0.2;
         } else {
-            // Autumn
             p1 = 0.3; p2 = 0.3; p3 = 0.4;
         }
 
         for (int i = 0; i < ausgaengeProMonat; i++) {
-            // random day in the month
+            LOGGER.log(Level.INFO, "Month {0}-{1}: Creating Warenausgang #{2}/{3}",
+                    new Object[] { year, month, (i+1), ausgaengeProMonat });
+
             int randomDay = ThreadLocalRandom.current().nextInt(1, lengthOfMonth + 1);
             LocalDate randomDate = LocalDate.of(year, month, randomDay);
             int randomHour = ThreadLocalRandom.current().nextInt(8, 18);
@@ -129,27 +130,35 @@ public class AsyncHistoryService {
             items.add(generateWarenausgangItemWithSeason(p1, p2, p3));
             items.add(generateWarenausgangItemWithSeason(p1, p2, p3));
 
-            Warenausgang createdWarenausgang =
-                    warenausgangManager.createWarenausgang(items, warenausgangTimestamp);
+            // 1) Create Warenausgang
+            Warenausgang createdWarenausgang = warenausgangManager.createWarenausgang(items, warenausgangTimestamp);
+            LOGGER.log(Level.INFO, "Warenausgang created, ID = {0}", createdWarenausgang.getWarenausgangId());
 
-            // Check stock -> create Wareneingang if needed
+            // 2) Check stock -> create Wareneingang if needed
             for (WarenausgangItem item : items) {
                 Product updatedProduct = getProductById(item.getProductId());
                 if (updatedProduct != null
                         && updatedProduct.getProductQuantity() < updatedProduct.getReorderPoint()) {
 
+                    LOGGER.log(Level.INFO, "Creating Wareneingang for productId {0} because quantity {1} < reorderPoint {2}",
+                            new Object[]{ updatedProduct.getProductId(), updatedProduct.getProductQuantity(), updatedProduct.getReorderPoint() });
+
                     WareneingangItem wareneingangItem = new WareneingangItem(
                             updatedProduct.getProductId(),
                             updatedProduct.getReorderQuantity()
                     );
-                    wareneingangManager.createWareneingang(
+                    Wareneingang we = wareneingangManager.createWareneingang(
                             Collections.singletonList(wareneingangItem),
                             warenausgangTimestamp
                     );
+                    LOGGER.log(Level.INFO, "Wareneingang created, ID = {0}", we.getWareneingangId());
                 }
             }
         }
+
+        LOGGER.log(Level.INFO, "Finished generating Warenausgaenge for {0}-{1}", new Object[] { year, month });
     }
+
 
     private WarenausgangItem generateWarenausgangItemWithSeason(double p1, double p2, double p3) {
         double rnd = Math.random();
