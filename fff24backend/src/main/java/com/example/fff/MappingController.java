@@ -31,7 +31,6 @@
         WarenausgangManager warenausgangManager = PostgresDBWarenausgangManagement.getInstance();
         WareneingangManager wareneingangManager = PostgresDBWareneingangManagement.getInstance();
         @Autowired
-        private AsyncHistoryService asyncHistoryService;
         private static final Logger LOGGER = Logger.getLogger(MappingController.class.getName());
 
         @GetMapping("/auth")
@@ -452,38 +451,6 @@
             } catch (Exception e) {
                 return ResponseEntity.badRequest().body("Could not create wareneingang: " + e.getMessage());
             }
-        }
-
-        // 4.1 Start asynchronous generation for multiple years
-        @GetMapping("/generate-history-async")
-        public ResponseEntity<?> generateHistoryAsync(
-                @RequestParam int startYear,
-                @RequestParam int endYear
-        ) {
-            // Create a unique job ID
-            String jobId = UUID.randomUUID().toString();
-
-            // Store an initial RUNNING status
-            asyncHistoryService.createJobStatus(jobId);
-
-            // Call the @Async method
-            asyncHistoryService.generateHistoryAsync(jobId, startYear, endYear);
-
-            // Return job ID to the client
-            Map<String, String> response = new HashMap<>();
-            response.put("jobId", jobId);
-            response.put("status", "RUNNING");
-            return ResponseEntity.accepted().body(response);
-        }
-
-        // 4.2 Check the status of a running job
-        @GetMapping("/generate-history-status/{jobId}")
-        public ResponseEntity<JobStatus> getHistoryStatus(@PathVariable String jobId) {
-            JobStatus status = asyncHistoryService.getJobStatus(jobId);
-            if (status == null) {
-                return ResponseEntity.notFound().build();
-            }
-            return ResponseEntity.ok(status);
         }
 
 
