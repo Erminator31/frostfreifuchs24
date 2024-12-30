@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 @Service
@@ -73,6 +74,10 @@ public class PostgresDBWareneingangManagement implements WareneingangManager {
 
     @Override
     public Wareneingang createWareneingang(List<WareneingangItem> items, Timestamp wareneingangDate) throws Exception {
+        LOGGER.log(Level.INFO,
+                "createWareneingang called with {0} items, date={1}",
+                new Object[]{ items.size(), wareneingangDate });
+
         Connection connection = null;
         PreparedStatement wEinStmt = null;
         PreparedStatement wEinItemStmt = null;
@@ -81,22 +86,30 @@ public class PostgresDBWareneingangManagement implements WareneingangManager {
         try {
             connection = basicDataSource.getConnection();
             connection.setAutoCommit(false);
+            LOGGER.log(Level.INFO, "Connection obtained, autoCommit set to false.");
 
-            String insertWEinSQL = "INSERT INTO wareneingaenge (wareneingangdate) VALUES (?) RETURNING wareneingangid, wareneingangdate";
+            String insertWEinSQL =
+                    "INSERT INTO wareneingaenge (wareneingangdate) VALUES (?) RETURNING wareneingangid, wareneingangdate";
             wEinStmt = connection.prepareStatement(insertWEinSQL);
             wEinStmt.setTimestamp(1, wareneingangDate);
-            rs = wEinStmt.executeQuery();
+            LOGGER.log(Level.INFO, "Executing SQL: {0}", insertWEinSQL);
 
+            rs = wEinStmt.executeQuery();
             int newWareneingangId = -1;
             Timestamp returnedDate = null;
             if (rs.next()) {
                 newWareneingangId = rs.getInt("wareneingangid");
                 returnedDate = rs.getTimestamp("wareneingangdate");
             }
+            LOGGER.log(Level.INFO, "Inserted Wareneingang, ID={0}, date={1}",
+                    new Object[]{ newWareneingangId, returnedDate });
 
             if (newWareneingangId == -1) {
                 throw new SQLException("Could not create wareneingang");
             }
+
+            rs.close();
+            wEinStmt.close();
 
             String insertItemSQL = "INSERT INTO wareneingang_items (wareneingangid, productid, quantity) VALUES (?,?,?)";
             wEinItemStmt = connection.prepareStatement(insertItemSQL);
@@ -107,9 +120,14 @@ public class PostgresDBWareneingangManagement implements WareneingangManager {
                 wEinItemStmt.setInt(3, item.getQuantity());
                 wEinItemStmt.addBatch();
 
+                LOGGER.log(Level.INFO, "Batching WareneingangItem for productId={0}, quantity={1}",
+                        new Object[]{ item.getProductId(), item.getQuantity() });
+
                 // Increase stock
                 String updateProduct = "UPDATE products SET quantity = quantity + ? WHERE productid = ?";
                 try (PreparedStatement ps = connection.prepareStatement(updateProduct)) {
+                    LOGGER.log(Level.INFO, "Updating product ID={0}, adding quantity={1}",
+                            new Object[]{ item.getProductId(), item.getQuantity() });
                     ps.setInt(1, item.getQuantity());
                     ps.setInt(2, item.getProductId());
                     ps.executeUpdate();
@@ -117,13 +135,17 @@ public class PostgresDBWareneingangManagement implements WareneingangManager {
             }
 
             wEinItemStmt.executeBatch();
+            LOGGER.log(Level.INFO, "Wareneingang items inserted via batch.");
+
             connection.commit();
+            LOGGER.log(Level.INFO, "Transaction committed for wareneingang {0}.", newWareneingangId);
 
             return new Wareneingang(newWareneingangId, returnedDate.toString(), items);
 
         } catch (Exception e) {
             if (connection != null) {
                 connection.rollback();
+                LOGGER.log(Level.SEVERE, "Exception in createWareneingang, rolling back: {0}", e.getMessage());
             }
             throw e;
         } finally {
@@ -131,8 +153,10 @@ public class PostgresDBWareneingangManagement implements WareneingangManager {
             if (wEinStmt != null) wEinStmt.close();
             if (wEinItemStmt != null) wEinItemStmt.close();
             if (connection != null) connection.close();
+            LOGGER.log(Level.INFO, "Resources closed in createWareneingang().");
         }
     }
+
 
     @Override
     public Wareneingang getWareneingang(int wareneingangId) throws Exception {
