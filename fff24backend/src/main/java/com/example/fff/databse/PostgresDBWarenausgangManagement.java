@@ -42,6 +42,9 @@ public class PostgresDBWarenausgangManagement implements WarenausgangManager {
         return instance;
     }
 
+    public BasicDataSource getDataSource() {
+        return basicDataSource;
+    }
     @Override
     public void createWarenausgangTable() throws Exception {
         try (Connection connection = basicDataSource.getConnection();

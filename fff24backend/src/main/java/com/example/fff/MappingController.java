@@ -13,6 +13,7 @@
     import org.springframework.http.ResponseEntity;
     import org.springframework.web.bind.annotation.*;
 
+    import java.sql.Connection;
     import java.sql.SQLException;
     import java.sql.Timestamp;
     import java.time.LocalDate;
@@ -453,6 +454,225 @@
             }
         }
 
+        @GetMapping("/forecast")
+        public ResponseEntity<?> getForecast(
+                @RequestParam(value = "forecastDays", defaultValue = "14") int forecastDays
+        ) {
+            // Logger, damit du siehst, wann der Endpoint aufgerufen wird
+            LOGGER.log(Level.INFO, "Received /forecast request mit forecastDays=" + forecastDays);
+
+            try {
+                // 1) Wetterdaten abrufen
+                //    Für das Beispiel verwenden wir Java 11+ HttpClient.
+                //    Du kannst auch RestTemplate oder WebClient nutzen.
+                String apiUrl = "https://api.open-meteo.com/v1/forecast?" +
+                        "latitude=49.68&longitude=9.18" +
+                        "&daily=temperature_2m_max,temperature_2m_min" +
+                        "&timezone=Europe/Berlin" +
+                        "&forecast_days=" + forecastDays;  // vom User festgelegt
+
+                // HTTP-Aufruf
+                String weatherJson = fetchWeatherData(apiUrl);
+
+                // 2) JSON parsen (z. B. via Jackson oder org.json):
+                //    Wir gehen hier beispielhaft mit org.json vor.
+                //    In einem echten Projekt evtl. über Jackson/DTOs besser lösen.
+                org.json.JSONObject json = new org.json.JSONObject(weatherJson);
+                org.json.JSONObject daily = json.getJSONObject("daily");
+                org.json.JSONArray timeArray = daily.getJSONArray("time");
+                org.json.JSONArray tempMaxArray = daily.getJSONArray("temperature_2m_max");
+                org.json.JSONArray tempMinArray = daily.getJSONArray("temperature_2m_min");
+
+                // Wir sammeln die Forecast-Tagesdaten (Datum + Durchschnittstemperatur)
+                List<DailyTemperature> dailyTemperatures = new ArrayList<>();
+                for (int i = 0; i < timeArray.length(); i++) {
+                    String dateString = timeArray.getString(i);
+                    double tmax = tempMaxArray.optDouble(i, 0.0);
+                    double tmin = tempMinArray.optDouble(i, 0.0);
+                    double avgTemp = (tmax + tmin) / 2.0; // einfacher Durchschnitt
+                    dailyTemperatures.add(new DailyTemperature(dateString, avgTemp));
+                }
+
+                // 3) Pro Produkt berechnen wir nun den erwarteten Tagesbedarf:
+                //    - Historische Warenausgänge (7 Tage Durchschnitt) => schon in DB,
+                //      bzw. wir nutzen die vorhandene Methode `calculateAverageDailyDemand(...)`
+                //    - Wetterfaktor
+                //    - Saisonaler Cosinus-Faktor
+                //    - Summiere Forecast für die nächsten 7 Tage => newDailyDemand
+                //    - Summiere Forecast für die nächsten 3 Tage => reorderPoint
+                //    - Summiere Forecast für die nächsten 7 Tage => reorderQuantity
+                //    - Falls quantity < reorderPoint => Wareneingang anstoßen
+
+                List<Product> allProducts = productManager.readProducts(null, null);
+                Map<Integer, List<Double>> productDailyForecasts = new HashMap<>();
+
+                // Verbindung für evtl. DB-Berechnungen (z. B. averageDailyDemand)
+                try (Connection conn = PostgresDBWarenausgangManagement.getInstance()
+                        .getDataSource()
+                        .getConnection())
+                {
+                    for (Product product : allProducts) {
+                        int pid = product.getProductId();
+
+                        // 3.1) Historischer 7-Tage-Durchschnitt
+                        double historicalAvg = warenausgangManager.calculateAverageDailyDemand(pid, conn);
+                        if (historicalAvg <= 0) {
+                            // Falls noch keine Daten vorhanden -> setze minimalen Wert
+                            historicalAvg = 5.0;
+                        }
+
+                        // 3.2) Für jeden Forecast-Tag:
+                        //      berechne wetterFaktor x saisonFaktor x historicalAvg
+                        List<Double> dailyForecastValues = new ArrayList<>();
+                        for (DailyTemperature dt : dailyTemperatures) {
+                            double temp = dt.avgTemp();
+                            double weatherFactor = getWeatherFactor(product.getProductId(), temp);
+                            double seasonFactor = getSeasonFactor(product.getProductId(), dt.dateString());
+                            double forecastForDay = historicalAvg * weatherFactor * (1.0 + seasonFactor);
+                            dailyForecastValues.add(forecastForDay);
+                        }
+                        productDailyForecasts.put(pid, dailyForecastValues);
+
+                        // 3.3) Nächste 7 Tage mitteln -> newDailyDemand
+                        //      Summiere alle 7-Tage-Forecast-Werte, dann /7
+                        double sum7 = 0.0;
+                        int limit7 = Math.min(7, dailyForecastValues.size());
+                        for (int i = 0; i < limit7; i++) {
+                            sum7 += dailyForecastValues.get(i);
+                        }
+                        int newDailyDemand = (int)Math.round(sum7 / limit7);
+
+                        // 3.4) reorder_point = Summe der nächsten 3 Tage (rounded)
+                        double sum3 = 0.0;
+                        int limit3 = Math.min(3, dailyForecastValues.size());
+                        for (int i = 0; i < limit3; i++) {
+                            sum3 += dailyForecastValues.get(i);
+                        }
+                        int newReorderPoint = (int)Math.round(sum3);
+
+                        // 3.5) reorder_quantity = Summe der nächsten 7 Tage (gerundet)
+                        int reorderQty = (int)Math.round(sum7);
+
+                        // 3.6) Werte in DB updaten
+                        productManager.updateProductForecastValues(product, newDailyDemand, newReorderPoint, reorderQty);
+
+                        // 3.7) Prüfen, ob quantity < reorderPoint => automatischer Wareneingang
+                        //      gem. Anforderung: reorder_quantity
+                        Product updatedP = productManager.readProductById(pid);
+                        if (updatedP != null && updatedP.getProductQuantity() < updatedP.getReorderPoint()) {
+                            // Automatische Nachbestellung
+                            WareneingangItem item = new WareneingangItem(pid, updatedP.getReorderQuantity());
+                            wareneingangManager.createWareneingang(Collections.singletonList(item));
+                            LOGGER.log(Level.INFO,
+                                    "Automatische Nachbestellung für ProductID=" + pid +
+                                            " mit Menge=" + updatedP.getReorderQuantity());
+                        }
+                    }
+                }
+
+                // 4) Fürs Frontend ausgeben: pro Tag und pro Produkt, wie viel Daily Demand erwartet wird
+                //    Damit man die Forecast-Daten sieht
+                Map<String, Object> result = new HashMap<>();
+                result.put("forecastDays", forecastDays);
+                result.put("weatherData", dailyTemperatures);
+                // Bsp.: productDailyForecasts enthält pro productId eine Liste der Forecasts
+                result.put("productForecasts", productDailyForecasts);
+
+                return ResponseEntity.ok(result);
+            } catch (Exception e) {
+                LOGGER.log(Level.SEVERE, "Fehler im /forecast Endpoint: " + e.getMessage(), e);
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body("Fehler bei /forecast: " + e.getMessage());
+            }
+        }
+
+        private String fetchWeatherData(String url) throws Exception {
+            // Java 11 HttpClient
+            java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create(url))
+                    .GET()
+                    .build();
+            java.net.http.HttpResponse<String> response = client.send(
+                    request,
+                    java.net.http.HttpResponse.BodyHandlers.ofString()
+            );
+            if (response.statusCode() == 200) {
+                return response.body();
+            } else {
+                throw new RuntimeException("Fehler beim Abruf der Wetter-API. Status=" + response.statusCode());
+            }
+        }
+
+        private static record DailyTemperature(String dateString, double avgTemp) {}
+
+        private double getWeatherFactor(int productId, double temperature) {
+            // Falls < -5 Grad
+            if (temperature < -5) {
+                return switch (productId) {
+                    case 1 -> 0.7;
+                    case 2 -> 0.2;
+                    case 3 -> 1.0;
+                    default -> 1.0; // Fallback
+                };
+            }
+            // Falls < 4 Grad
+            else if (temperature < 4) {
+                return switch (productId) {
+                    case 1 -> 1.0;
+                    case 2 -> 0.2;
+                    case 3 -> 0.5;
+                    default -> 1.0;
+                };
+            }
+            // Falls >= 4 Grad
+            else {
+                return switch (productId) {
+                    case 1 -> 0.2;
+                    case 2 -> 1.0;
+                    case 3 -> 0.05;
+                    default -> 1.0;
+                };
+            }
+        }
+
+        private double getSeasonFactor(int productId, String isoDate) {
+            // isoDate z.B. "2025-01-12"
+            // Wir parse das Jahr,Monat,Tag -> extrahieren Monat
+            java.time.LocalDate date = java.time.LocalDate.parse(isoDate);
+            int monthIndex = date.getMonthValue() - 1; // 0..11
+
+            return switch (productId) {
+                case 1 -> seasonFactorProduct1(monthIndex);
+                case 2 -> seasonFactorProduct2(monthIndex);
+                case 3 -> seasonFactorProduct3(monthIndex);
+                default -> 0.0; // Fallback
+            };
+        }
+
+        private double seasonFactorProduct1(int x) {
+            // g(x) = | - ( cos(π/6 * x) + 1.2 ) * 0.4 |
+            double val = -(Math.cos(Math.PI / 6.0 * x) + 1.2) * 0.4;
+            return Math.abs(val);
+        }
+
+        private double seasonFactorProduct2(int x) {
+            // f(x) = | - ( cos(π/6 * x) - 1.2 ) * 0.4 |
+            double val = -(Math.cos(Math.PI / 6.0 * x) - 1.2) * 0.4;
+            return Math.abs(val);
+        }
+
+        private double seasonFactorProduct3(int x) {
+            // Produkt 3:
+            //   - Bei x=0 oder x=11 => wie Produkt1(x=0 bzw. x=11)
+            //   - Sonst wie Produkt1(x=6)
+            if (x == 0 || x == 11) {
+                return seasonFactorProduct1(x);
+            } else {
+                // tu so, als wär x=6 => seasonFactorProduct1(6)
+                return seasonFactorProduct1(6);
+            }
+        }
 
 
 

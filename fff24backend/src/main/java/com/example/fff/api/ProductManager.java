@@ -22,4 +22,9 @@ public interface ProductManager {
     void deleteProductsTable() throws SQLException;
 
     void updateDailyDemand() throws Exception;
+
+    void updateProductForecastValues(Product product,
+                                     int newDailyDemand,
+                                     int newReorderPoint,
+                                     int newReorderQuantity) throws SQLException;
 }

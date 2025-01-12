@@ -2,6 +2,7 @@ package com.example.fff.Scheduler;
 
 
 
+import com.example.fff.MappingController;
 import com.example.fff.databse.PostgresDBProductManagement;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -22,15 +23,24 @@ public class DailyDemandScheduler {
     /**
      * Tägliche Aufgabe zur Aktualisierung des dailyDemand um 1:00 Uhr morgens.
      */
-    @Scheduled(cron = "0 0 1 * * ?") // Täglich um 1:00 Uhr
-    public void updateDailyDemandDaily() {
+    @Scheduled(cron = "0 0 0 * * ?") // täglich um Mitternacht
+    public void runForecastDaily() {
+        LOGGER.log(Level.INFO, "Scheduled Task: runForecastDaily() aufgerufen.");
+
+        // Wir simulieren einfach den GET-Call auf /forecast mit 14 Tagen.
         try {
-            LOGGER.log(Level.INFO, "Scheduled Task: Starting dailyDemand update.");
-            productManager.updateDailyDemand();
-            LOGGER.log(Level.INFO, "Scheduled Task: dailyDemand update completed successfully.");
+            // Da wir hier keinen direkten HTTP-Call machen wollen, rufen wir
+            // am besten direkt eine interne Methode in MappingController auf
+            // (z.B. extrahiere Logik in Service-Klasse) oder wir machen
+            // tatsächlich einen HTTP-Call, je nach Architektur.
+
+            // Minimale Demo, Pseudocode:
+            MappingController controller = new MappingController();
+            controller.getForecast(14);
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Scheduled Task: Error updating dailyDemand: " + e.getMessage(), e);
+            LOGGER.log(Level.SEVERE, "Fehler im Scheduled Forecast: " + e.getMessage(), e);
         }
     }
+
 }
 

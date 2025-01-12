@@ -454,4 +454,36 @@
             }
         }
 
+        @Override
+        public void updateProductForecastValues(Product product,
+                                                int newDailyDemand,
+                                                int newReorderPoint,
+                                                int newReorderQuantity) throws SQLException {
+            Connection connection = null;
+            PreparedStatement stmt = null;
+            try {
+                connection = PostgresDBProductManagement.getPostgresDBProductManagement()
+                        .basicDataSource
+                        .getConnection();
+                String sql = """
+                UPDATE products
+                SET daily_demand = ?,
+                    reorder_point = ?,
+                    reorder_quantity = ?
+                WHERE productid = ?
+            """;
+                stmt = connection.prepareStatement(sql);
+                stmt.setInt(1, newDailyDemand);
+                stmt.setInt(2, newReorderPoint);
+                stmt.setInt(3, newReorderQuantity);
+                stmt.setInt(4, product.getProductId());
+                stmt.executeUpdate();
+            } finally {
+                if (stmt != null) stmt.close();
+                if (connection != null) connection.close();
+            }
+        }
+
+
+
     }
