@@ -249,8 +249,8 @@ public class PostgresDBWarenausgangManagement implements WarenausgangManager {
         String query = "SELECT o.warenausgangdate, oi.quantity FROM warenausgaenge o "
                 + "JOIN warenausgang_items oi ON o.warenausgangid = oi.warenausgangid "
                 + "WHERE oi.productid = ? "
-                + "ORDER BY o.warenausgangdate DESC "
-                + "LIMIT 10;";
+                + "AND o.warenausgangdate >= DATEADD(DAY, -14, GETDATE()) "
+                + "ORDER BY o.warenausgangdate DESC ";
 
         List<Timestamp> ausgangDates = new ArrayList<>();
         int totalQuantity = 0;
