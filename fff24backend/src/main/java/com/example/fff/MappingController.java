@@ -18,6 +18,7 @@
     import java.sql.Timestamp;
     import java.time.LocalDate;
     import java.time.LocalDateTime;
+    import java.time.format.DateTimeFormatter;
     import java.util.*;
     import java.util.concurrent.ThreadLocalRandom;
     import java.util.logging.Level;
@@ -464,37 +465,38 @@
             LOGGER.log(Level.INFO, "Received /forecast request mit forecastDays=" + forecastDays);
 
             try {
-                // 1) Aus DB laden
+                // 1) Aktuelle Weights aus DB laden
                 ForecastWeights currentWeights = productManager.getForecastWeights();
                 double alpha = currentWeights.getAlpha();
                 double beta  = currentWeights.getBeta();
                 double gamma = currentWeights.getGamma();
 
-                // 2) Falls im Request neue Werte vorhanden sind, updaten wir die DB
+                // 2) Falls im Request neue Werte übergeben wurden, DB updaten
                 boolean changed = false;
-                if (alphaParam != null && alphaParam != alpha) {
+                if (alphaParam != null && !alphaParam.equals(alpha)) {
                     alpha = alphaParam;
                     changed = true;
                 }
-                if (betaParam != null && betaParam != beta) {
+                if (betaParam != null && !betaParam.equals(beta)) {
                     beta = betaParam;
                     changed = true;
                 }
-                if (gammaParam != null && gammaParam != gamma) {
+                if (gammaParam != null && !gammaParam.equals(gamma)) {
                     gamma = gammaParam;
                     changed = true;
                 }
                 if (changed) {
                     productManager.updateForecastWeights(alpha, beta, gamma);
-                    LOGGER.log(Level.INFO, "Forecast weights updated in DB: alpha=" + alpha + ", beta=" + beta + ", gamma=" + gamma);
+                    LOGGER.log(Level.INFO, "Forecast weights updated in DB: alpha=" + alpha
+                            + ", beta=" + beta + ", gamma=" + gamma);
                 }
 
-                // 3) Wetterdaten abrufen (wie gehabt)
-                String apiUrl = "https://api.open-meteo.com/v1/forecast?" +
-                        "latitude=49.68&longitude=9.18" +
-                        "&daily=temperature_2m_max,temperature_2m_min" +
-                        "&timezone=Europe/Berlin" +
-                        "&forecast_days=" + forecastDays;
+                // 3) Wetterdaten abrufen
+                String apiUrl = "https://api.open-meteo.com/v1/forecast?"
+                        + "latitude=49.68&longitude=9.18"
+                        + "&daily=temperature_2m_max,temperature_2m_min"
+                        + "&timezone=Europe/Berlin"
+                        + "&forecast_days=" + forecastDays;
 
                 String weatherJson = fetchWeatherData(apiUrl);
 
@@ -505,26 +507,44 @@
                 org.json.JSONArray tempMaxArray = daily.getJSONArray("temperature_2m_max");
                 org.json.JSONArray tempMinArray = daily.getJSONArray("temperature_2m_min");
 
-                // Tagesdaten sammeln
+                // 5) Tagesdaten sammeln
                 List<DailyTemperature> dailyTemperatures = new ArrayList<>();
+                // Wir bauen uns auch gleich eine List<String> fuer das Frontend-Datum
+                List<String> dateList = new ArrayList<>();
+
+                // Optional: Formatter, um "2025-01-12" in "12.01.2025" zu konvertieren
+                DateTimeFormatter inputFmt  = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+                DateTimeFormatter outputFmt = DateTimeFormatter.ofPattern("dd. MM. yyyy");
+
                 for (int i = 0; i < timeArray.length(); i++) {
                     String dateString = timeArray.getString(i);
                     double tmax = tempMaxArray.optDouble(i, 0.0);
                     double tmin = tempMinArray.optDouble(i, 0.0);
                     double avgTemp = (tmax + tmin) / 2.0;
+
                     dailyTemperatures.add(new DailyTemperature(dateString, avgTemp));
+
+                    // Konvertieren in ein schöneres Datumsformat
+                    // (z.B. "12.01.2025")
+                    LocalDate parsed = LocalDate.parse(dateString, inputFmt);
+                    String formattedDate = parsed.format(outputFmt);
+                    dateList.add(formattedDate);
                 }
 
-                // 5) Pro Produkt Forecast berechnen
+                // 6) Forecast pro Produkt berechnen
                 List<Product> allProducts = productManager.readProducts(null, null);
-                Map<Integer, List<Double>> productDailyForecasts = new HashMap<>();
+
+                // Hier speichern wir am Ende: data[productName] -> ArrayList<Double> (Forecast-Werte)
+                Map<String, List<Double>> dataMap = new LinkedHashMap<>();
 
                 try (Connection conn = PostgresDBWarenausgangManagement.getInstance()
                         .getDataSource()
                         .getConnection())
                 {
                     for (Product product : allProducts) {
+                        // Einfache Lesbarkeit:
                         int pid = product.getProductId();
+                        String pName = product.getProductName();
 
                         // Historischer 7-Tage-Durchschnitt
                         double historicalAvg = warenausgangManager.calculateAverageDailyDemand(pid, conn);
@@ -532,23 +552,27 @@
                             historicalAvg = 5.0;
                         }
 
-                        // Tagesweise Forecast
                         List<Double> dailyForecastValues = new ArrayList<>();
                         for (DailyTemperature dt : dailyTemperatures) {
                             double temp = dt.avgTemp();
-                            double weatherFactor = getWeatherFactor(product.getProductId(), temp);
-                            double seasonFactor = getSeasonFactor(product.getProductId(), dt.dateString());
+                            double weatherFactor = getWeatherFactor(pid, temp);
+                            double seasonFactor = getSeasonFactor(pid, dt.dateString());
 
-                            // Beispiel: multiplikative Anwendung von alpha,beta,gamma
+                            // Multiplikative Anwendung von alpha, beta, gamma
                             double forecastForDay = (alpha * historicalAvg)
                                     * (beta * weatherFactor)
                                     * (gamma * (1.0 + seasonFactor));
 
                             dailyForecastValues.add(forecastForDay);
                         }
-                        productDailyForecasts.put(pid, dailyForecastValues);
 
-                        // Nächste 7 Tage
+                        // Legen wir in dataMap ab: Key=ProduktName, Value=List<Double> Forecast
+                        dataMap.put(pName, dailyForecastValues);
+
+                        // -----------------------------------------
+                        // Reorder- und Wareneingangslogik:
+                        // -----------------------------------------
+                        // Nächste 7 Tage summieren
                         double sum7 = 0.0;
                         int limit7 = Math.min(7, dailyForecastValues.size());
                         for (int i = 0; i < limit7; i++) {
@@ -556,7 +580,7 @@
                         }
                         int newDailyDemand = (int)Math.round(sum7 / limit7);
 
-                        // Nächste 3 Tage
+                        // Nächste 3 Tage summieren
                         double sum3 = 0.0;
                         int limit3 = Math.min(3, dailyForecastValues.size());
                         for (int i = 0; i < limit3; i++) {
@@ -564,32 +588,44 @@
                         }
                         int newReorderPoint = (int)Math.round(sum3);
 
-                        // reorder_quantity
+                        // reorder_quantity = Summe der nächsten 7 Tage
                         int reorderQty = (int)Math.round(sum7);
 
-                        // In DB updaten
+                        // DB-Update
                         productManager.updateProductForecastValues(product, newDailyDemand, newReorderPoint, reorderQty);
 
-                        // Automatischer Wareneingang
+                        // Falls quantity < reorderPoint, automatischer Wareneingang
                         Product updatedP = productManager.readProductById(pid);
                         if (updatedP != null && updatedP.getProductQuantity() < updatedP.getReorderPoint()) {
                             WareneingangItem item = new WareneingangItem(pid, updatedP.getReorderQuantity());
                             wareneingangManager.createWareneingang(Collections.singletonList(item));
                             LOGGER.log(Level.INFO,
-                                    "Automatische Nachbestellung für ProductID=" + pid +
-                                            " mit Menge=" + updatedP.getReorderQuantity());
+                                    "Automatische Nachbestellung für ProductID=" + pid
+                                            + " mit Menge=" + updatedP.getReorderQuantity());
                         }
                     }
                 }
 
-                // 6) Antwort ans Frontend
+                // 7) Antwort-Objekt bauen:
+                // Wir wollen:
+                // {
+                //   alphaUsed: x,
+                //   betaUsed: y,
+                //   gammaUsed: z,
+                //   dates: [ ... ],
+                //   data: {
+                //       "Klaus Winter": [... Forecast-Werte ...],
+                //       "Klaus Summer": [...],
+                //       ...
+                //   }
+                // }
+
                 Map<String, Object> result = new HashMap<>();
-                result.put("forecastDays", forecastDays);
                 result.put("alphaUsed", alpha);
                 result.put("betaUsed", beta);
                 result.put("gammaUsed", gamma);
-                result.put("weatherData", dailyTemperatures);
-                result.put("productForecasts", productDailyForecasts);
+                result.put("dates", dateList);
+                result.put("data", dataMap);
 
                 return ResponseEntity.ok(result);
 
