@@ -1,6 +1,7 @@
     package com.example.fff.databse;
 
     import com.example.fff.api.ProductManager;
+    import com.example.fff.model.ForecastWeights;
     import com.example.fff.model.Product;
     import org.apache.commons.dbcp.BasicDataSource;
     import org.springframework.stereotype.Service;
@@ -484,6 +485,71 @@
             }
         }
 
+     @Override
+        public ForecastWeights getForecastWeights() throws SQLException {
+            String sql = "SELECT alpha, beta, gamma FROM forecast_weights WHERE id=1";
+            try (Connection connection = basicDataSource.getConnection();
+                 Statement stmt = connection.createStatement();
+                 ResultSet rs = stmt.executeQuery(sql)) {
+                if (rs.next()) {
+                    double alpha = rs.getDouble("alpha");
+                    double beta  = rs.getDouble("beta");
+                    double gamma = rs.getDouble("gamma");
+                    return new ForecastWeights(alpha, beta, gamma);
+                } else {
+                    // Falls kein Eintrag existiert, Standardwerte zurückgeben oder anlegen
+                    return new ForecastWeights(1.0, 1.0, 1.0);
+                }
+            }
+        }
+
+
+        @Override
+        public void updateForecastWeights(double alpha, double beta, double gamma) throws SQLException {
+            String sql = "UPDATE forecast_weights SET alpha=?, beta=?, gamma=? WHERE id=1";
+            try (Connection connection = basicDataSource.getConnection();
+                 PreparedStatement pstmt = connection.prepareStatement(sql)) {
+                pstmt.setDouble(1, alpha);
+                pstmt.setDouble(2, beta);
+                pstmt.setDouble(3, gamma);
+                int updated = pstmt.executeUpdate();
+                if (updated == 0) {
+                    // Falls noch kein Datensatz da ist, lege ihn an
+                    String insertSQL = "INSERT INTO forecast_weights (id, alpha, beta, gamma) VALUES (1, ?, ?, ?)";
+                    try (PreparedStatement ins = connection.prepareStatement(insertSQL)) {
+                        ins.setDouble(1, alpha);
+                        ins.setDouble(2, beta);
+                        ins.setDouble(3, gamma);
+                        ins.executeUpdate();
+                    }
+                }
+            }
+        }
+
+        @Override
+        public void createForecastWeightsTable() throws SQLException {
+            String createTableSQL = """
+        CREATE TABLE IF NOT EXISTS forecast_weights (
+            id SERIAL PRIMARY KEY,
+            alpha DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+            beta  DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+            gamma DOUBLE PRECISION NOT NULL DEFAULT 1.0
+        );
+    """;
+
+            try (Connection connection = basicDataSource.getConnection();
+                 Statement stmt = connection.createStatement()) {
+                stmt.execute(createTableSQL);
+
+                // Optional: gleich einen Default-Datensatz (id=1) anlegen, falls nicht vorhanden
+                String insertDefaultSQL = """
+            INSERT INTO forecast_weights (id, alpha, beta, gamma)
+            VALUES (1, 1.0, 1.0, 1.0)
+            ON CONFLICT DO NOTHING;
+        """;
+                stmt.execute(insertDefaultSQL);
+            }
+        }
 
 
     }

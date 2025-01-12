@@ -456,57 +456,69 @@
 
         @GetMapping("/forecast")
         public ResponseEntity<?> getForecast(
-                @RequestParam(value = "forecastDays", defaultValue = "14") int forecastDays
+                @RequestParam(value = "forecastDays", defaultValue = "14") int forecastDays,
+                @RequestParam(value = "alpha", required = false) Double alphaParam,
+                @RequestParam(value = "beta", required = false) Double betaParam,
+                @RequestParam(value = "gamma", required = false) Double gammaParam
         ) {
-            // Logger, damit du siehst, wann der Endpoint aufgerufen wird
             LOGGER.log(Level.INFO, "Received /forecast request mit forecastDays=" + forecastDays);
 
             try {
-                // 1) Wetterdaten abrufen
-                //    Für das Beispiel verwenden wir Java 11+ HttpClient.
-                //    Du kannst auch RestTemplate oder WebClient nutzen.
+                // 1) Aus DB laden
+                ForecastWeights currentWeights = productManager.getForecastWeights();
+                double alpha = currentWeights.getAlpha();
+                double beta  = currentWeights.getBeta();
+                double gamma = currentWeights.getGamma();
+
+                // 2) Falls im Request neue Werte vorhanden sind, updaten wir die DB
+                boolean changed = false;
+                if (alphaParam != null && alphaParam != alpha) {
+                    alpha = alphaParam;
+                    changed = true;
+                }
+                if (betaParam != null && betaParam != beta) {
+                    beta = betaParam;
+                    changed = true;
+                }
+                if (gammaParam != null && gammaParam != gamma) {
+                    gamma = gammaParam;
+                    changed = true;
+                }
+                if (changed) {
+                    productManager.updateForecastWeights(alpha, beta, gamma);
+                    LOGGER.log(Level.INFO, "Forecast weights updated in DB: alpha=" + alpha + ", beta=" + beta + ", gamma=" + gamma);
+                }
+
+                // 3) Wetterdaten abrufen (wie gehabt)
                 String apiUrl = "https://api.open-meteo.com/v1/forecast?" +
                         "latitude=49.68&longitude=9.18" +
                         "&daily=temperature_2m_max,temperature_2m_min" +
                         "&timezone=Europe/Berlin" +
-                        "&forecast_days=" + forecastDays;  // vom User festgelegt
+                        "&forecast_days=" + forecastDays;
 
-                // HTTP-Aufruf
                 String weatherJson = fetchWeatherData(apiUrl);
 
-                // 2) JSON parsen (z. B. via Jackson oder org.json):
-                //    Wir gehen hier beispielhaft mit org.json vor.
-                //    In einem echten Projekt evtl. über Jackson/DTOs besser lösen.
+                // 4) JSON parsen
                 org.json.JSONObject json = new org.json.JSONObject(weatherJson);
                 org.json.JSONObject daily = json.getJSONObject("daily");
                 org.json.JSONArray timeArray = daily.getJSONArray("time");
                 org.json.JSONArray tempMaxArray = daily.getJSONArray("temperature_2m_max");
                 org.json.JSONArray tempMinArray = daily.getJSONArray("temperature_2m_min");
 
-                // Wir sammeln die Forecast-Tagesdaten (Datum + Durchschnittstemperatur)
+                // Tagesdaten sammeln
                 List<DailyTemperature> dailyTemperatures = new ArrayList<>();
                 for (int i = 0; i < timeArray.length(); i++) {
                     String dateString = timeArray.getString(i);
                     double tmax = tempMaxArray.optDouble(i, 0.0);
                     double tmin = tempMinArray.optDouble(i, 0.0);
-                    double avgTemp = (tmax + tmin) / 2.0; // einfacher Durchschnitt
+                    double avgTemp = (tmax + tmin) / 2.0;
                     dailyTemperatures.add(new DailyTemperature(dateString, avgTemp));
                 }
 
-                // 3) Pro Produkt berechnen wir nun den erwarteten Tagesbedarf:
-                //    - Historische Warenausgänge (7 Tage Durchschnitt) => schon in DB,
-                //      bzw. wir nutzen die vorhandene Methode `calculateAverageDailyDemand(...)`
-                //    - Wetterfaktor
-                //    - Saisonaler Cosinus-Faktor
-                //    - Summiere Forecast für die nächsten 7 Tage => newDailyDemand
-                //    - Summiere Forecast für die nächsten 3 Tage => reorderPoint
-                //    - Summiere Forecast für die nächsten 7 Tage => reorderQuantity
-                //    - Falls quantity < reorderPoint => Wareneingang anstoßen
-
+                // 5) Pro Produkt Forecast berechnen
                 List<Product> allProducts = productManager.readProducts(null, null);
                 Map<Integer, List<Double>> productDailyForecasts = new HashMap<>();
 
-                // Verbindung für evtl. DB-Berechnungen (z. B. averageDailyDemand)
                 try (Connection conn = PostgresDBWarenausgangManagement.getInstance()
                         .getDataSource()
                         .getConnection())
@@ -514,27 +526,29 @@
                     for (Product product : allProducts) {
                         int pid = product.getProductId();
 
-                        // 3.1) Historischer 7-Tage-Durchschnitt
+                        // Historischer 7-Tage-Durchschnitt
                         double historicalAvg = warenausgangManager.calculateAverageDailyDemand(pid, conn);
                         if (historicalAvg <= 0) {
-                            // Falls noch keine Daten vorhanden -> setze minimalen Wert
                             historicalAvg = 5.0;
                         }
 
-                        // 3.2) Für jeden Forecast-Tag:
-                        //      berechne wetterFaktor x saisonFaktor x historicalAvg
+                        // Tagesweise Forecast
                         List<Double> dailyForecastValues = new ArrayList<>();
                         for (DailyTemperature dt : dailyTemperatures) {
                             double temp = dt.avgTemp();
                             double weatherFactor = getWeatherFactor(product.getProductId(), temp);
                             double seasonFactor = getSeasonFactor(product.getProductId(), dt.dateString());
-                            double forecastForDay = historicalAvg * weatherFactor * (1.0 + seasonFactor);
+
+                            // Beispiel: multiplikative Anwendung von alpha,beta,gamma
+                            double forecastForDay = (alpha * historicalAvg)
+                                    * (beta * weatherFactor)
+                                    * (gamma * (1.0 + seasonFactor));
+
                             dailyForecastValues.add(forecastForDay);
                         }
                         productDailyForecasts.put(pid, dailyForecastValues);
 
-                        // 3.3) Nächste 7 Tage mitteln -> newDailyDemand
-                        //      Summiere alle 7-Tage-Forecast-Werte, dann /7
+                        // Nächste 7 Tage
                         double sum7 = 0.0;
                         int limit7 = Math.min(7, dailyForecastValues.size());
                         for (int i = 0; i < limit7; i++) {
@@ -542,7 +556,7 @@
                         }
                         int newDailyDemand = (int)Math.round(sum7 / limit7);
 
-                        // 3.4) reorder_point = Summe der nächsten 3 Tage (rounded)
+                        // Nächste 3 Tage
                         double sum3 = 0.0;
                         int limit3 = Math.min(3, dailyForecastValues.size());
                         for (int i = 0; i < limit3; i++) {
@@ -550,17 +564,15 @@
                         }
                         int newReorderPoint = (int)Math.round(sum3);
 
-                        // 3.5) reorder_quantity = Summe der nächsten 7 Tage (gerundet)
+                        // reorder_quantity
                         int reorderQty = (int)Math.round(sum7);
 
-                        // 3.6) Werte in DB updaten
+                        // In DB updaten
                         productManager.updateProductForecastValues(product, newDailyDemand, newReorderPoint, reorderQty);
 
-                        // 3.7) Prüfen, ob quantity < reorderPoint => automatischer Wareneingang
-                        //      gem. Anforderung: reorder_quantity
+                        // Automatischer Wareneingang
                         Product updatedP = productManager.readProductById(pid);
                         if (updatedP != null && updatedP.getProductQuantity() < updatedP.getReorderPoint()) {
-                            // Automatische Nachbestellung
                             WareneingangItem item = new WareneingangItem(pid, updatedP.getReorderQuantity());
                             wareneingangManager.createWareneingang(Collections.singletonList(item));
                             LOGGER.log(Level.INFO,
@@ -570,15 +582,17 @@
                     }
                 }
 
-                // 4) Fürs Frontend ausgeben: pro Tag und pro Produkt, wie viel Daily Demand erwartet wird
-                //    Damit man die Forecast-Daten sieht
+                // 6) Antwort ans Frontend
                 Map<String, Object> result = new HashMap<>();
                 result.put("forecastDays", forecastDays);
+                result.put("alphaUsed", alpha);
+                result.put("betaUsed", beta);
+                result.put("gammaUsed", gamma);
                 result.put("weatherData", dailyTemperatures);
-                // Bsp.: productDailyForecasts enthält pro productId eine Liste der Forecasts
                 result.put("productForecasts", productDailyForecasts);
 
                 return ResponseEntity.ok(result);
+
             } catch (Exception e) {
                 LOGGER.log(Level.SEVERE, "Fehler im /forecast Endpoint: " + e.getMessage(), e);
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -586,8 +600,8 @@
             }
         }
 
+
         private String fetchWeatherData(String url) throws Exception {
-            // Java 11 HttpClient
             java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
             java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
                     .uri(java.net.URI.create(url))
@@ -628,7 +642,7 @@
             // Falls >= 4 Grad
             else {
                 return switch (productId) {
-                    case 1 -> 0.2;
+                    case 1 -> 0.1;
                     case 2 -> 1.0;
                     case 3 -> 0.05;
                     default -> 1.0;
@@ -674,6 +688,22 @@
             }
         }
 
+        @GetMapping("/create-forecast-weights-table")
+        public ResponseEntity<String> createForecastWeightsTable() {
+            LOGGER.log(Level.INFO, "MappingController create-forecast-weights-table invoked");
+            try {
+                // Hier rufst du die Methode in deinem DB-Manager auf,
+                // die das CREATE TABLE durchführt.
+                productManager.createForecastWeightsTable();
 
+                // Gibt eine einfache OK-Nachricht zurück
+                return ResponseEntity.ok("forecast_weights table created (or already exists).");
+            } catch (Exception e) {
+                // Fehlerbehandlung
+                LOGGER.log(Level.SEVERE, "Fehler beim Erstellen der forecast_weights-Tabelle: " + e.getMessage(), e);
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body("Error creating forecast_weights table: " + e.getMessage());
+            }
+        }
 
     }

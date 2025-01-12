@@ -1,5 +1,6 @@
 package com.example.fff.api;
 
+import com.example.fff.model.ForecastWeights;
 import com.example.fff.model.Product;
 
 import java.sql.SQLException;
@@ -27,4 +28,10 @@ public interface ProductManager {
                                      int newDailyDemand,
                                      int newReorderPoint,
                                      int newReorderQuantity) throws SQLException;
+
+    ForecastWeights getForecastWeights() throws SQLException;
+
+    void updateForecastWeights(double alpha, double beta, double gamma) throws SQLException;
+
+    void createForecastWeightsTable() throws SQLException;
 }
