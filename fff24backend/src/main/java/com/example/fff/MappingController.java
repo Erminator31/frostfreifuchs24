@@ -24,23 +24,99 @@
     import java.util.logging.Level;
     import java.util.logging.Logger;
 
+    /**
+     * This class represents a MappingController that handles mapping endpoints for managing products, warenausgangs, wareneingangs, and forecasts.
+     * It contains methods for retrieving information, creating tables, adding and removing products, creating warenausgangs and wareneingangs,
+     * generating historical data, updating daily demand, getting forecasts, and managing weather and season factors.
+     * It also includes private helper methods for generating warenausgaenge, fetching weather data, and calculating factors.
+     *
+     * Fields:
+     * productManager - interface for managing products
+     * warenausgangManager - manager for warenausgangs
+     * wareneingangManager - manager for wareneingangs
+     * LOGGER - Logger for logging messages
+     *
+     * Methods:
+     * - getInfo: Retrieves information with a given name
+     * - createProductTable: Creates a table for products
+     * - createWarenausgangTable: Creates a table for warenausgangs
+     * - createWarenausgangItemTable: Creates a table for warenausgang items
+     * - addProduct: Adds a product to the system
+     * - getProducts: Retrieves a list of products based on given criteria
+     * - removeProduct: Removes a product by ID
+     * - deleteProductsTable: Deletes the products table
+     * - deleteWarenausgangTable: Deletes the warenausgang table
+     * - deleteWarenausgangItemsTable: Deletes the warenausgang items table
+     * - createWarenausgang: Creates a warenausgang entry
+     * - getWarenausgang: Retrieves a warenausgang by ID
+     * - getAllWarenausgaenge: Retrieves all warenausgaenge
+     * - generateHistoricalData: Generates historical data for a given year and month
+     * - generateWarenausgaengeForDateRange: Helper method for generating warenausgaenge within a date range
+     * - getProductById: Retrieves a product by ID
+     * - generateWarenausgangItemWithSeason: Helper method for generating warenausgang item with season factors
+     * - ensureProductsExist: Ensures that products exist in the system
+     * - updateDailyDemand: Updates the daily demand for products
+     * - getAllWareneingaenge: Retrieves all wareneingaenge entries
+     * - createWareneingangTable: Creates a table for wareneingangs
+     * - createWareneingangItemTable: Creates a table for wareneingang items
+     * - deleteWareneingangTable: Deletes the wareneingang table
+     * - deleteWareneingangItemsTable: Deletes the wareneingang items table
+     * - createWareneingang: Creates a wareneingang entry
+     * - getForecast: Retrieves a forecast for the given days and parameters
+     * - fetchWeatherData: Helper method for fetching weather data from a URL
+     * - getWeatherFactor: Calculates the weather factor for a product
+     * - getSeasonFactor: Calculates the season factor for a product at a given date
+     * - seasonFactorProduct1: Calculates the season factor for product 1
+     * - seasonFactorProduct2: Calculates the season factor for product 2
+     * - seasonFactorProduct3: Calculates the season factor for product 3
+     * - createForecastWeightsTable: Creates a table for forecast weights
+     */
     @CrossOrigin(origins = "*", allowedHeaders = "*")
     @RestController
     @RequestMapping("/api")
     public class MappingController {
 
+        /**
+         * Interface for managing products in a database.
+         * Provides methods for creating, reading, updating, and deleting products,
+         * as well as managing forecast weights for future predictions.
+         */
         ProductManager productManager = PostgresDBProductManagement.getPostgresDBProductManagement();
+        /**
+         * Interface for managing warehouse outbound operations.
+         * Provides methods to create, retrieve, and delete warehouse outbound data.
+         */
         WarenausgangManager warenausgangManager = PostgresDBWarenausgangManagement.getInstance();
+        /**
+         * Interface for managing warehouse incoming goods.
+         * Provides methods to create, retrieve, and delete warehouse incoming goods and their items.
+         */
         WareneingangManager wareneingangManager = PostgresDBWareneingangManagement.getInstance();
+        /**
+         * LOGGER is a static final Logger instance used for logging within the MappingController class.
+         */
         @Autowired
         private static final Logger LOGGER = Logger.getLogger(MappingController.class.getName());
 
+        /**
+         * Retrieves information for authentication.
+         *
+         * @param name the name to be used for authentication
+         * @return a string indicating successful authentication ("ok")
+         */
         @GetMapping("/auth")
         public String getInfo(@RequestParam(value = "name", defaultValue = "Name") String name) {
             Logger.getLogger("MappingController").log(Level.INFO, "MappingController auth " + name);
             return "ok";
         }
 
+        /**
+         * Creates the product table in the database.
+         * This method delegates the creation of the product table to the ProductManager instance.
+         *
+         * @return a string indicating the success of the operation
+         * @throws Exception if an error occurs during the table creation process
+         */
         @GetMapping("/create-products-table")
         public String createProductTable() throws Exception {
             Logger.getLogger("MappingController").log(Level.INFO, "MappingController create-product-table ");
@@ -48,6 +124,13 @@
             return "ok";
         }
 
+        /**
+         * Creates the Warenausgang table in the database.
+         * This method delegates the creation to the WarenausgangManager.
+         *
+         * @return a String indicating the status of the operation ("ok" if successful)
+         * @throws Exception if an error occurs during the table creation process
+         */
         @GetMapping("/create-warenausgang-table")
         public String createWarenausgangTable() throws Exception {
             Logger.getLogger("MappingController").log(Level.INFO, "MappingController create-warenausgang-table ");
@@ -55,6 +138,11 @@
             return "ok";
         }
 
+        /**
+         * Creates the Warenausgang Item table.
+         *
+         * @throws Exception if an error occurs during the table creation process
+         */
         @GetMapping("/create-warenausgangitem-table")
         public String createWarenausgangItemTable() throws Exception {
             Logger.getLogger("MappingController").log(Level.INFO, "MappingController create-warenausgangitem-table ");
@@ -62,6 +150,12 @@
             return "ok";
         }
 
+        /**
+         * Adds a new product with the provided details.
+         *
+         * @param product The product object to be added, containing name, type, and quantity.
+         * @return ResponseEntity with a success message if the product is added/updated successfully, or a bad request status with an error message.
+         */
         @PostMapping(path = "/product/add", consumes = {MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_XML_VALUE})
         public ResponseEntity<?> addProduct(@RequestBody Product product) {
             Logger.getLogger("MappingController").log(Level.INFO, "MappingController POST /product/add " + product.getProductName());
@@ -80,6 +174,14 @@
             }
         }
 
+        /**
+         * Retrieves a list of products based on the provided filters.
+         *
+         * @param productName Optional parameter to filter products by name.
+         * @param productType Optional parameter to filter products by type.
+         * @return ResponseEntity with the list of products that match the given filters.
+         *         Returns a 204 No Content status if no products are found.
+         */
         @GetMapping("/products")
         public ResponseEntity<List<Product>> getProducts(
                 @RequestParam(value = "productName", required = false) String productName,
@@ -95,6 +197,13 @@
             return ResponseEntity.ok(products);
         }
 
+        /**
+         * Removes a product with the specified ID from the system.
+         *
+         * @param productId The ID of the product to be removed
+         * @return ResponseEntity representing the status of the removal operation. Returns OK with a success message if the product was removed successfully,
+         *         Not Found if the product could not be found, and Internal Server Error if an error occurred during the removal process.
+         */
         @DeleteMapping("/product/delete/{id}")
         public ResponseEntity<?> removeProduct(@PathVariable("id") int productId) {
             Logger.getLogger("MappingController").log(Level.INFO, "MappingController DELETE /product/" + productId);
@@ -113,6 +222,11 @@
             }
         }
 
+        /**
+         * Deletes the products table from the database.
+         *
+         * @return ResponseEntity indicating the result of the operation
+         */
         @GetMapping("/delete-products-table")
         public ResponseEntity<String> deleteProductsTable() {
             try {
@@ -124,6 +238,11 @@
             }
         }
 
+        /**
+         * Deletes the Warenausgang table from the database.
+         *
+         * @return ResponseEntity indicating the result of the deletion operation.
+         */
         @GetMapping("/delete-warenausgang-table")
         public ResponseEntity<String> deleteWarenausgangTable() {
             try {
@@ -560,8 +679,8 @@
 
                             // Multiplikative Anwendung von alpha, beta, gamma
                             double forecastForDay = (alpha * historicalAvg)
-                                    * (beta * weatherFactor)
-                                    * (gamma * (1.0 + seasonFactor));
+                                    * (beta * weatherFactor
+                                    + gamma * (1.0 + seasonFactor));
 
                             dailyForecastValues.add(forecastForDay);
                         }
@@ -654,7 +773,7 @@
             }
         }
 
-        private static record DailyTemperature(String dateString, double avgTemp) {}
+        private record DailyTemperature(String dateString, double avgTemp) {}
 
         private double getWeatherFactor(int productId, double temperature) {
             // Falls < -5 Grad
