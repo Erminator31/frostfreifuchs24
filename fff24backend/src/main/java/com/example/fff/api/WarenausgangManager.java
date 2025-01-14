@@ -1,5 +1,6 @@
 package com.example.fff.api;
 
+import com.example.fff.model.TagesStatistik;
 import com.example.fff.model.Warenausgang;
 import com.example.fff.model.WarenausgangItem;
 
@@ -21,4 +22,6 @@ public interface WarenausgangManager {
     double calculateAverageDailyDemand(int productId, Connection connection) throws SQLException;
 
     List<Warenausgang> getWarenausgaenge(Timestamp from, Timestamp to) throws Exception;
+
+    List<TagesStatistik> getWarenausgaengeProTag(Timestamp from, Timestamp to) throws Exception;
 }

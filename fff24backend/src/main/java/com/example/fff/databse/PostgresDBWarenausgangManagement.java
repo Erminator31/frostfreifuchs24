@@ -3,10 +3,7 @@ package com.example.fff.databse;
 import com.example.fff.api.ProductManager;
 import com.example.fff.api.WarenausgangManager;
 import com.example.fff.api.WareneingangManager;
-import com.example.fff.model.Product;
-import com.example.fff.model.Warenausgang;
-import com.example.fff.model.WarenausgangItem;
-import com.example.fff.model.WareneingangItem;
+import com.example.fff.model.*;
 import org.apache.commons.dbcp.BasicDataSource;
 import org.springframework.stereotype.Service;
 
@@ -332,5 +329,43 @@ public class PostgresDBWarenausgangManagement implements WarenausgangManager {
         }
         return warenausgaenge;
     }
+
+
+    @Override
+    public List<TagesStatistik> getWarenausgaengeProTag(Timestamp from, Timestamp to) throws Exception {
+        List<TagesStatistik> statistikListe = new ArrayList<>();
+        String sql = "SELECT DATE(warenausgangdate) AS tag, COUNT(*) AS anzahl " +
+                "FROM warenausgaenge " +
+                "WHERE 1=1";
+        if (from != null) {
+            sql += " AND warenausgangdate >= ?";
+        }
+        if (to != null) {
+            sql += " AND warenausgangdate <= ?";
+        }
+        sql += " GROUP BY DATE(warenausgangdate) ORDER BY DATE(warenausgangdate)";
+
+        try (Connection connection = basicDataSource.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
+
+            int paramIndex = 1;
+            if (from != null) {
+                stmt.setTimestamp(paramIndex++, from);
+            }
+            if (to != null) {
+                stmt.setTimestamp(paramIndex++, to);
+            }
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    String tag = rs.getString("tag");
+                    int anzahl = rs.getInt("anzahl");
+                    statistikListe.add(new TagesStatistik(tag, anzahl));
+                }
+            }
+        }
+        return statistikListe;
+    }
+
 
 }

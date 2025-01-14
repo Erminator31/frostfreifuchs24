@@ -878,4 +878,54 @@
             }
         }
 
+
+        @GetMapping("/warenausgaenge/pro-tag")
+        public ResponseEntity<?> getWarenausgaengeProTag(
+                @RequestParam(value = "from", required = false) String fromDateStr,
+                @RequestParam(value = "to", required = false) String toDateStr) {
+            try {
+                // Konvertierung der Datumsstrings in Timestamps
+                Timestamp fromTimestamp = null;
+                Timestamp toTimestamp = null;
+                if (fromDateStr != null && !fromDateStr.isEmpty()) {
+                    fromTimestamp = Timestamp.valueOf(fromDateStr + " 00:00:00");
+                }
+                if (toDateStr != null && !toDateStr.isEmpty()) {
+                    toTimestamp = Timestamp.valueOf(toDateStr + " 23:59:59");
+                }
+
+                // Abruf der Statistikdaten aus dem Manager
+                List<TagesStatistik> statistik = warenausgangManager.getWarenausgaengeProTag(fromTimestamp, toTimestamp);
+
+                if (statistik.isEmpty()) {
+                    return ResponseEntity.noContent().build();
+                }
+
+                // Separiere Daten in zwei Listen: dates und data
+                List<String> dates = new ArrayList<>();
+                List<Integer> data = new ArrayList<>();
+                DateTimeFormatter inputFmt  = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+                DateTimeFormatter outputFmt = DateTimeFormatter.ofPattern("dd. MM. yyyy");
+
+                for (TagesStatistik ts : statistik) {
+                    // Konvertiere das Datum ins gewünschte Format
+                    LocalDate parsedDate = LocalDate.parse(ts.getDatum(), inputFmt);
+                    dates.add(parsedDate.format(outputFmt));
+
+                    data.add(ts.getAnzahl());
+                }
+
+                // Erstelle die Antwortstruktur
+                Map<String, Object> response = new HashMap<>();
+                response.put("dates", dates);
+                response.put("data", data);
+
+                return ResponseEntity.ok(response);
+            } catch (Exception e) {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body("Fehler beim Abrufen der Tagesstatistik: " + e.getMessage());
+            }
+        }
+
+
     }
