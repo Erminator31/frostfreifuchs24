@@ -667,6 +667,8 @@
 
                         // Historischer 7-Tage-Durchschnitt
                         double historicalAvg = warenausgangManager.calculateAverageDailyDemand(pid, conn);
+                        LOGGER.log(Level.INFO, "historicalavg=" + historicalAvg);
+
                         if (historicalAvg <= 0) {
                             historicalAvg = 5.0;
                         }
