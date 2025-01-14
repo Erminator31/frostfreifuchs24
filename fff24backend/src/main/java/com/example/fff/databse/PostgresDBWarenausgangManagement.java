@@ -12,7 +12,6 @@ import org.springframework.stereotype.Service;
 
 import java.sql.*;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -95,7 +94,6 @@ public class PostgresDBWarenausgangManagement implements WarenausgangManager {
         PreparedStatement warenausgangStmt = null;
         PreparedStatement warenausgangItemStmt = null;
         PreparedStatement updateProductStmt = null;
-        PreparedStatement updateReorderStmt = null;
         ResultSet rs = null;
 
         try {
@@ -103,7 +101,7 @@ public class PostgresDBWarenausgangManagement implements WarenausgangManager {
             connection.setAutoCommit(false);
             LOGGER.log(Level.INFO, "Connection obtained and autoCommit set to false.");
 
-            // Insert Warenausgang
+            // 1) Warenausgang anlegen
             String insertWarenausgangSQL = "INSERT INTO warenausgaenge (warenausgangdate) VALUES (?) RETURNING warenausgangid, warenausgangdate";
             warenausgangStmt = connection.prepareStatement(insertWarenausgangSQL);
             warenausgangStmt.setTimestamp(1, warenausgangDate);
@@ -126,7 +124,7 @@ public class PostgresDBWarenausgangManagement implements WarenausgangManager {
             rs.close();
             warenausgangStmt.close();
 
-            // Prepare item insert
+            // 2) WarenausgangItems anlegen & Produktmengen reduzieren
             String insertWarenausgangItemSQL = "INSERT INTO warenausgang_items (warenausgangid, productid, quantity) VALUES (?, ?, ?)";
             warenausgangItemStmt = connection.prepareStatement(insertWarenausgangItemSQL);
 
@@ -134,20 +132,16 @@ public class PostgresDBWarenausgangManagement implements WarenausgangManager {
             updateProductStmt = connection.prepareStatement(updateProductSQL);
 
             for (WarenausgangItem item : items) {
-                // Insert Warenausgang item
+                // a) WarenausgangItems speichern
                 warenausgangItemStmt.setInt(1, newWarenausgangId);
                 warenausgangItemStmt.setInt(2, item.getProductId());
                 warenausgangItemStmt.setInt(3, item.getQuantity());
                 warenausgangItemStmt.addBatch();
 
-                // Decrease product stock
+                // b) Produktbestand reduzieren
                 updateProductStmt.setInt(1, item.getQuantity());
                 updateProductStmt.setInt(2, item.getProductId());
                 updateProductStmt.addBatch();
-
-                LOGGER.log(Level.INFO,
-                        "Batching item insert for productId={0}, quantity={1} and product update (subtract).",
-                        new Object[]{ item.getProductId(), item.getQuantity() });
             }
 
             warenausgangItemStmt.executeBatch();
@@ -156,32 +150,36 @@ public class PostgresDBWarenausgangManagement implements WarenausgangManager {
             updateProductStmt.executeBatch();
             LOGGER.log(Level.INFO, "Product quantities updated via batch.");
 
-            List<WareneingangItem> reorderItems = new ArrayList<>();
+            // 3) **Automatisches Nachbestellen prüfen**
             ProductManager productManager = PostgresDBProductManagement.getPostgresDBProductManagement();
             WareneingangManager wareneingangManager = PostgresDBWareneingangManagement.getInstance();
 
+            List<WareneingangItem> reorderItems = new ArrayList<>();
+
+            // Für jedes WarenausgangItem prüfen, ob jetzt der Bestand < reorder_point ist
             for (WarenausgangItem item : items) {
-                // Produkt aus Datenbank lesen, um aktuellen Bestand und Reorder-Werte zu erhalten
-                Product product = productManager.readProductById(item.getProductId());
-                if (product != null && product.getProductQuantity() < product.getReorderPoint()) {
-                    // Falls Lagerbestand unter Schwellenwert, füge Nachbestellartikel hinzu
-                    int reorderQty = product.getReorderQuantity();
-                    reorderItems.add(new WareneingangItem(product.getProductId(), reorderQty));
-                    LOGGER.log(Level.INFO, "Produkt ID {0} unterschreitet reorder_point. Automatische Nachbestellung von {1} Einheiten.",
-                            new Object[]{product.getProductId(), reorderQty});
+                Product updatedProduct = productManager.readProductById(item.getProductId());
+                if (updatedProduct != null) {
+                    // Wenn der neue Bestand unter dem reorder_point liegt,
+                    // Merke den Artikel für eine automatische Nachbestellung vor
+                    if (updatedProduct.getProductQuantity() < updatedProduct.getReorderPoint()) {
+                        reorderItems.add(new WareneingangItem(
+                                updatedProduct.getProductId(),
+                                updatedProduct.getReorderQuantity()
+                        ));
+                    }
                 }
             }
 
-// Falls es Nachbestellungen gibt, automatisch Wareneingang erzeugen
+            // Falls es Produkte gibt, die nachbestellt werden müssen, buchen wir einen Wareneingang
             if (!reorderItems.isEmpty()) {
-                // Optional: Setzen eines Zeitstempels für den Wareneingang, z.B. jetzt
-                Timestamp now = new Timestamp(System.currentTimeMillis());
-                wareneingangManager.createWareneingang(reorderItems, now);
-                LOGGER.log(Level.INFO, "Automatischer Wareneingang für Produkte mit Nachbestellung erstellt.");
+                LOGGER.log(Level.INFO, "Erstelle automatischen Wareneingang für {0} Produkte.",
+                        reorderItems.size());
+                // Hier können Sie entscheiden, ob das Datum dem Warenausgang entspricht oder "now()"
+                wareneingangManager.createWareneingang(reorderItems, warenausgangDate);
             }
 
-            connection.commit();
-
+            // 4) Transaktion abschließen
             connection.commit();
             LOGGER.log(Level.INFO, "Transaction committed for warenausgang {0}.", newWarenausgangId);
 
@@ -198,7 +196,6 @@ public class PostgresDBWarenausgangManagement implements WarenausgangManager {
             if (warenausgangStmt != null) warenausgangStmt.close();
             if (warenausgangItemStmt != null) warenausgangItemStmt.close();
             if (updateProductStmt != null) updateProductStmt.close();
-            if (updateReorderStmt != null) updateReorderStmt.close();
             if (connection != null) connection.close();
             LOGGER.log(Level.INFO, "Resources closed in createWarenausgang().");
         }

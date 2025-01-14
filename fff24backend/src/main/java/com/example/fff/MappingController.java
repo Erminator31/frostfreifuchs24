@@ -283,6 +283,7 @@
                     createdWarenausgang = warenausgangManager.createWarenausgang(warenausgangRequest.getItems(), warenausgangDate);
                 }
 
+
                 return ResponseEntity.ok(createdWarenausgang);
             } catch (Exception e) {
                 return ResponseEntity.badRequest().body("Could not create warenausgang: " + e.getMessage());
