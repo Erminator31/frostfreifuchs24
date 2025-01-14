@@ -1,7 +1,9 @@
 package com.example.fff.databse;
 
+import com.example.fff.api.ProductManager;
 import com.example.fff.api.WarenausgangManager;
 import com.example.fff.api.WareneingangManager;
+import com.example.fff.model.Product;
 import com.example.fff.model.Warenausgang;
 import com.example.fff.model.WarenausgangItem;
 import com.example.fff.model.WareneingangItem;
@@ -154,8 +156,31 @@ public class PostgresDBWarenausgangManagement implements WarenausgangManager {
             updateProductStmt.executeBatch();
             LOGGER.log(Level.INFO, "Product quantities updated via batch.");
 
-            // Then reorder logic, etc...
-            // If you're calling reorder or Wareneingang code, add logs there as well.
+            List<WareneingangItem> reorderItems = new ArrayList<>();
+            ProductManager productManager = PostgresDBProductManagement.getPostgresDBProductManagement();
+            WareneingangManager wareneingangManager = PostgresDBWareneingangManagement.getInstance();
+
+            for (WarenausgangItem item : items) {
+                // Produkt aus Datenbank lesen, um aktuellen Bestand und Reorder-Werte zu erhalten
+                Product product = productManager.readProductById(item.getProductId());
+                if (product != null && product.getProductQuantity() < product.getReorderPoint()) {
+                    // Falls Lagerbestand unter Schwellenwert, füge Nachbestellartikel hinzu
+                    int reorderQty = product.getReorderQuantity();
+                    reorderItems.add(new WareneingangItem(product.getProductId(), reorderQty));
+                    LOGGER.log(Level.INFO, "Produkt ID {0} unterschreitet reorder_point. Automatische Nachbestellung von {1} Einheiten.",
+                            new Object[]{product.getProductId(), reorderQty});
+                }
+            }
+
+// Falls es Nachbestellungen gibt, automatisch Wareneingang erzeugen
+            if (!reorderItems.isEmpty()) {
+                // Optional: Setzen eines Zeitstempels für den Wareneingang, z.B. jetzt
+                Timestamp now = new Timestamp(System.currentTimeMillis());
+                wareneingangManager.createWareneingang(reorderItems, now);
+                LOGGER.log(Level.INFO, "Automatischer Wareneingang für Produkte mit Nachbestellung erstellt.");
+            }
+
+            connection.commit();
 
             connection.commit();
             LOGGER.log(Level.INFO, "Transaction committed for warenausgang {0}.", newWarenausgangId);

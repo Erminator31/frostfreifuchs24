@@ -473,7 +473,7 @@
                 productManager.addProduct("Klaus Winter", "Mit Frostschutz", 1000);
             }
             if (!has2) {
-                productManager.addProduct("Klaus Summer", "Mit Frostschutz", 1000);
+                productManager.addProduct("Klaus Summer", "Ohne Frostschutz", 1000);
             }
             if (!has3) {
                 productManager.addProduct("Klaus Xtreme", "Mit Frostschutz", 1000);
@@ -683,7 +683,6 @@
                             double forecastForDay = (alpha * historicalAvg)
                                     * (beta * weatherFactor
                                     + gamma * (1.0 + seasonFactor));
-
                             dailyForecastValues.add(forecastForDay);
                         }
 
