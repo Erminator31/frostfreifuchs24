@@ -105,83 +105,46 @@ public class PostgresDBWarenausgangManagement implements WarenausgangManager {
             String insertWarenausgangSQL = "INSERT INTO warenausgaenge (warenausgangdate) VALUES (?) RETURNING warenausgangid, warenausgangdate";
             warenausgangStmt = connection.prepareStatement(insertWarenausgangSQL);
             warenausgangStmt.setTimestamp(1, warenausgangDate);
-            LOGGER.log(Level.INFO, "Executing SQL: {0}", insertWarenausgangSQL);
-
             rs = warenausgangStmt.executeQuery();
+
             int newWarenausgangId = -1;
             Timestamp returnedDate = null;
             if (rs.next()) {
                 newWarenausgangId = rs.getInt("warenausgangid");
                 returnedDate = rs.getTimestamp("warenausgangdate");
             }
-            LOGGER.log(Level.INFO, "Inserted new Warenausgang with ID={0}, date={1}",
-                    new Object[]{ newWarenausgangId, returnedDate });
-
             if (newWarenausgangId == -1) {
                 throw new SQLException("Could not create warenausgang");
             }
-
             rs.close();
             warenausgangStmt.close();
 
             // 2) WarenausgangItems anlegen & Produktmengen reduzieren
             String insertWarenausgangItemSQL = "INSERT INTO warenausgang_items (warenausgangid, productid, quantity) VALUES (?, ?, ?)";
             warenausgangItemStmt = connection.prepareStatement(insertWarenausgangItemSQL);
-
             String updateProductSQL = "UPDATE products SET quantity = quantity - ? WHERE productid = ?";
             updateProductStmt = connection.prepareStatement(updateProductSQL);
 
             for (WarenausgangItem item : items) {
-                // a) WarenausgangItems speichern
                 warenausgangItemStmt.setInt(1, newWarenausgangId);
                 warenausgangItemStmt.setInt(2, item.getProductId());
                 warenausgangItemStmt.setInt(3, item.getQuantity());
                 warenausgangItemStmt.addBatch();
 
-                // b) Produktbestand reduzieren
                 updateProductStmt.setInt(1, item.getQuantity());
                 updateProductStmt.setInt(2, item.getProductId());
                 updateProductStmt.addBatch();
             }
 
             warenausgangItemStmt.executeBatch();
-            LOGGER.log(Level.INFO, "Warenausgang items inserted via batch.");
-
             updateProductStmt.executeBatch();
-            LOGGER.log(Level.INFO, "Product quantities updated via batch.");
 
-            // 3) **Automatisches Nachbestellen prüfen**
-            ProductManager productManager = PostgresDBProductManagement.getPostgresDBProductManagement();
-            WareneingangManager wareneingangManager = PostgresDBWareneingangManagement.getInstance();
-
-            List<WareneingangItem> reorderItems = new ArrayList<>();
-
-            // Für jedes WarenausgangItem prüfen, ob jetzt der Bestand < reorder_point ist
-            for (WarenausgangItem item : items) {
-                Product updatedProduct = productManager.readProductById(item.getProductId());
-                if (updatedProduct != null) {
-                    // Wenn der neue Bestand unter dem reorder_point liegt,
-                    // Merke den Artikel für eine automatische Nachbestellung vor
-                    if (updatedProduct.getProductQuantity() < updatedProduct.getReorderPoint()) {
-                        reorderItems.add(new WareneingangItem(
-                                updatedProduct.getProductId(),
-                                updatedProduct.getReorderQuantity()
-                        ));
-                    }
-                }
-            }
-
-            // Falls es Produkte gibt, die nachbestellt werden müssen, buchen wir einen Wareneingang
-            if (!reorderItems.isEmpty()) {
-                LOGGER.log(Level.INFO, "Erstelle automatischen Wareneingang für {0} Produkte.",
-                        reorderItems.size());
-                // Hier können Sie entscheiden, ob das Datum dem Warenausgang entspricht oder "now()"
-                wareneingangManager.createWareneingang(reorderItems, warenausgangDate);
-            }
-
-            // 4) Transaktion abschließen
+            // 3) Transaktion abschließen
             connection.commit();
             LOGGER.log(Level.INFO, "Transaction committed for warenausgang {0}.", newWarenausgangId);
+
+            // 4) Nach dem Commit automatische Nachbestellungen verarbeiten
+            processAutomaticReorders(items, warenausgangDate);
 
             return new Warenausgang(newWarenausgangId, returnedDate.toString(), items);
 
@@ -201,6 +164,35 @@ public class PostgresDBWarenausgangManagement implements WarenausgangManager {
         }
     }
 
+
+    private void processAutomaticReorders(List<WarenausgangItem> items, Timestamp referenceDate) {
+        try {
+            ProductManager productManager = PostgresDBProductManagement.getPostgresDBProductManagement();
+            WareneingangManager wareneingangManager = PostgresDBWareneingangManagement.getInstance();
+
+            List<WareneingangItem> reorderItems = new ArrayList<>();
+
+            // Prüfen für jedes Item, ob eine Nachbestellung nötig ist
+            for (WarenausgangItem item : items) {
+                Product updatedProduct = productManager.readProductById(item.getProductId());
+                if (updatedProduct != null
+                        && updatedProduct.getProductQuantity() < updatedProduct.getReorderPoint()) {
+                    reorderItems.add(new WareneingangItem(
+                            updatedProduct.getProductId(),
+                            updatedProduct.getReorderQuantity()
+                    ));
+                }
+            }
+
+            if (!reorderItems.isEmpty()) {
+                LOGGER.log(Level.INFO, "Erstelle automatischen Wareneingang für {0} Produkte.", reorderItems.size());
+                // Einen separaten Wareneingang außerhalb der ursprünglichen Transaktion erstellen
+                wareneingangManager.createWareneingang(reorderItems, referenceDate);
+            }
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Fehler bei der automatischen Nachbestellung: " + e.getMessage(), e);
+        }
+    }
 
     @Override
     public Warenausgang getWarenausgang(int warenausgangId) throws Exception {
