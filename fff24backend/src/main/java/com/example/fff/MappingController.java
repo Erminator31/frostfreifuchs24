@@ -304,9 +304,23 @@
         }
 
         @GetMapping("/warenausgaenge")
-        public ResponseEntity<?> getAllWarenausgaenge() {
+        public ResponseEntity<?> getAllWarenausgaenge(
+                @RequestParam(value = "from", required = false) String fromDateStr,
+                @RequestParam(value = "to", required = false) String toDateStr) {
             try {
-                List<Warenausgang> warenausgaenge = warenausgangManager.getAllWarenausgaenge();
+                // Falls vorhanden, parse die Datumsparameter
+                Timestamp fromTimestamp = null;
+                Timestamp toTimestamp = null;
+                if (fromDateStr != null && !fromDateStr.isEmpty()) {
+                    fromTimestamp = Timestamp.valueOf(fromDateStr + " 00:00:00");
+                }
+                if (toDateStr != null && !toDateStr.isEmpty()) {
+                    toTimestamp = Timestamp.valueOf(toDateStr + " 23:59:59");
+                }
+
+                // Rufe die Methode im Manager mit den Zeitparametern auf
+                List<Warenausgang> warenausgaenge = warenausgangManager.getWarenausgaenge(fromTimestamp, toTimestamp);
+
                 if (warenausgaenge.isEmpty()) {
                     return ResponseEntity.noContent().build();
                 }
@@ -315,6 +329,7 @@
                 return ResponseEntity.status(500).body("Error retrieving warenausgaenge: " + e.getMessage());
             }
         }
+
 
         @GetMapping("/generate-history")
         public ResponseEntity<String> generateHistoricalData(

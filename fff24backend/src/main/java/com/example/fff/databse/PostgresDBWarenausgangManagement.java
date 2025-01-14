@@ -297,4 +297,40 @@ public class PostgresDBWarenausgangManagement implements WarenausgangManager {
 
         return totalQuantity / days;
     }
+
+    @Override
+    public List<Warenausgang> getWarenausgaenge(Timestamp from, Timestamp to) throws Exception {
+        List<Warenausgang> warenausgaenge = new ArrayList<>();
+        String sql = "SELECT warenausgangid FROM warenausgaenge WHERE 1=1";
+        if (from != null) {
+            sql += " AND warenausgangdate >= ?";
+        }
+        if (to != null) {
+            sql += " AND warenausgangdate <= ?";
+        }
+
+        try (Connection connection = basicDataSource.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
+
+            int paramIndex = 1;
+            if (from != null) {
+                stmt.setTimestamp(paramIndex++, from);
+            }
+            if (to != null) {
+                stmt.setTimestamp(paramIndex++, to);
+            }
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    int warenausgangId = rs.getInt("warenausgangid");
+                    Warenausgang w = getWarenausgang(warenausgangId);
+                    if (w != null) {
+                        warenausgaenge.add(w);
+                    }
+                }
+            }
+        }
+        return warenausgaenge;
+    }
+
 }

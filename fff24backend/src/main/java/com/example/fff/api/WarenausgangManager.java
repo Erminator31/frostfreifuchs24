@@ -19,4 +19,6 @@ public interface WarenausgangManager {
     void deleteWarenausgangItemsTable() throws SQLException;
 
     double calculateAverageDailyDemand(int productId, Connection connection) throws SQLException;
+
+    List<Warenausgang> getWarenausgaenge(Timestamp from, Timestamp to) throws Exception;
 }
