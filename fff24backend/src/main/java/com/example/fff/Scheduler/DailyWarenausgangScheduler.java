@@ -28,7 +28,7 @@ public class DailyWarenausgangScheduler {
     }
 
     // Dieser Scheduled-Task wird einmal täglich um Mitternacht gestartet
-    @Scheduled(cron = "0 16 13 * * ?")
+    @Scheduled(cron = "0 19 12 * * ?")
     public void simulateDailyWarenausgaenge() {
         try {
             LOGGER.log(Level.INFO, "Starte tägliche Simulation der Warenausgänge...");
