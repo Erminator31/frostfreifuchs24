@@ -88,6 +88,39 @@ public class PostgresDBWareneingangManagement implements WareneingangManager {
             connection.setAutoCommit(false);
             LOGGER.log(Level.INFO, "Connection obtained, autoCommit set to false.");
 
+            // Ermitteln des aktuellen Gesamtbestands
+            String sumSQL = "SELECT COALESCE(SUM(quantity), 0) AS total_quantity FROM products";
+            int currentTotalQuantity = 0;
+            try (PreparedStatement sumStmt = connection.prepareStatement(sumSQL);
+                 ResultSet sumRs = sumStmt.executeQuery()) {
+                if (sumRs.next()) {
+                    currentTotalQuantity = sumRs.getInt("total_quantity");
+                }
+            }
+            int remainingCapacity = 20000 - currentTotalQuantity;
+            LOGGER.log(Level.INFO, "Aktueller Gesamtbestand: {0}, verbleibende Kapazität: {1}",
+                    new Object[]{ currentTotalQuantity, remainingCapacity });
+
+            // Mengenanpassung der eingehenden Artikel basierend auf der verbleibenden Kapazität
+            List<WareneingangItem> adjustedItems = new ArrayList<>();
+            for (WareneingangItem item : items) {
+                if (remainingCapacity <= 0) {
+                    break;  // Keine Kapazität mehr vorhanden
+                }
+                int quantityToAdd = Math.min(item.getQuantity(), remainingCapacity);
+                if (quantityToAdd > 0) {
+                    adjustedItems.add(new WareneingangItem(item.getProductId(), quantityToAdd));
+                    remainingCapacity -= quantityToAdd;
+                }
+            }
+
+            // Falls keine Artikel hinzugefügt werden können, brechen Sie ab
+            if (adjustedItems.isEmpty()) {
+                connection.rollback();
+                throw new Exception("Keine Kapazität mehr für Wareneingänge. Der Lagerbestand ist bei 20.000.");
+            }
+
+            // Fortfahren mit den angepassten Artikeln
             String insertWEinSQL =
                     "INSERT INTO wareneingaenge (wareneingangdate) VALUES (?) RETURNING wareneingangid, wareneingangdate";
             wEinStmt = connection.prepareStatement(insertWEinSQL);
@@ -114,7 +147,7 @@ public class PostgresDBWareneingangManagement implements WareneingangManager {
             String insertItemSQL = "INSERT INTO wareneingang_items (wareneingangid, productid, quantity) VALUES (?,?,?)";
             wEinItemStmt = connection.prepareStatement(insertItemSQL);
 
-            for (WareneingangItem item : items) {
+            for (WareneingangItem item : adjustedItems) {
                 wEinItemStmt.setInt(1, newWareneingangId);
                 wEinItemStmt.setInt(2, item.getProductId());
                 wEinItemStmt.setInt(3, item.getQuantity());
@@ -123,7 +156,7 @@ public class PostgresDBWareneingangManagement implements WareneingangManager {
                 LOGGER.log(Level.INFO, "Batching WareneingangItem for productId={0}, quantity={1}",
                         new Object[]{ item.getProductId(), item.getQuantity() });
 
-                // Increase stock
+                // Bestand erhöhen
                 String updateProduct = "UPDATE products SET quantity = quantity + ? WHERE productid = ?";
                 try (PreparedStatement ps = connection.prepareStatement(updateProduct)) {
                     LOGGER.log(Level.INFO, "Updating product ID={0}, adding quantity={1}",
@@ -140,7 +173,7 @@ public class PostgresDBWareneingangManagement implements WareneingangManager {
             connection.commit();
             LOGGER.log(Level.INFO, "Transaction committed for wareneingang {0}.", newWareneingangId);
 
-            return new Wareneingang(newWareneingangId, returnedDate.toString(), items);
+            return new Wareneingang(newWareneingangId, returnedDate.toString(), adjustedItems);
 
         } catch (Exception e) {
             if (connection != null) {
@@ -156,6 +189,7 @@ public class PostgresDBWareneingangManagement implements WareneingangManager {
             LOGGER.log(Level.INFO, "Resources closed in createWareneingang().");
         }
     }
+
 
 
     @Override
