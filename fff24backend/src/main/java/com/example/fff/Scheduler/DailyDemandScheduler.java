@@ -5,6 +5,7 @@ package com.example.fff.Scheduler;
 import com.example.fff.MappingController;
 import com.example.fff.databse.PostgresDBProductManagement;
 import com.example.fff.model.ForecastWeights;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -13,6 +14,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 @Component
+@EnableScheduling
 public class DailyDemandScheduler {
 
     private static final Logger LOGGER = Logger.getLogger(DailyDemandScheduler.class.getName());

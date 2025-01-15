@@ -11,6 +11,7 @@
     import org.springframework.http.HttpStatus;
     import org.springframework.http.MediaType;
     import org.springframework.http.ResponseEntity;
+    import org.springframework.scheduling.annotation.EnableScheduling;
     import org.springframework.web.bind.annotation.*;
 
     import java.sql.Connection;
@@ -73,7 +74,9 @@
      */
     @CrossOrigin(origins = "*", allowedHeaders = "*")
     @RestController
+    @EnableScheduling
     @RequestMapping("/api")
+
     public class MappingController {
 
         /**

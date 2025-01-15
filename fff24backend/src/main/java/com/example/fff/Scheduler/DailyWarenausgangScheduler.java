@@ -4,6 +4,7 @@ import com.example.fff.api.ProductManager;
 import com.example.fff.api.WarenausgangManager;
 import com.example.fff.model.Product;
 import com.example.fff.model.WarenausgangItem;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import java.sql.Timestamp;
@@ -16,6 +17,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 @Service
+@EnableScheduling
 public class DailyWarenausgangScheduler {
 
     private final WarenausgangManager warenausgangManager;
@@ -28,7 +30,7 @@ public class DailyWarenausgangScheduler {
     }
 
     // Dieser Scheduled-Task wird einmal täglich um Mitternacht gestartet
-    @Scheduled(cron = "0 19 12 * * ?")
+    @Scheduled(cron = "0 25 12 * * ?")
     public void simulateDailyWarenausgaenge() {
         try {
             LOGGER.log(Level.INFO, "Starte tägliche Simulation der Warenausgänge...");
