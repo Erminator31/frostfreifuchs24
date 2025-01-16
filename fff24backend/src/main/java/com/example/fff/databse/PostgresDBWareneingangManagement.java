@@ -273,8 +273,8 @@ public class PostgresDBWareneingangManagement implements WareneingangManager {
         if (to != null) {
             sql += " AND wg.warenausgangdate <= ?";
         }
-        sql += " GROUP BY DATE(wg.warenausgangdate), p.productname " +
-                "ORDER BY DATE(wg.warenausgangdate), p.productname";
+        sql += " GROUP BY DATE(wg.wareneingangdate), p.productname " +
+                "ORDER BY DATE(wg.wareneingangdate), p.productname";
 
         try (Connection connection = basicDataSource.getConnection();
              PreparedStatement stmt = connection.prepareStatement(sql)) {
