@@ -966,5 +966,89 @@
             }
         }
 
+        @GetMapping("/wareneingaenge/pro-tag")
+        public ResponseEntity<?> getWareneingaengeProTag(
+                @RequestParam(value = "from", required = false) String fromDateStr,
+                @RequestParam(value = "to", required = false) String toDateStr) {
+            try {
+                // Konvertierung der Datumsstrings in Timestamps
+                Timestamp fromTimestamp = null;
+                Timestamp toTimestamp = null;
+                DateTimeFormatter inputFmt  = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+                DateTimeFormatter outputFmt = DateTimeFormatter.ofPattern("dd. MM. yyyy");
+
+                // Optional: Standardzeitraum festlegen (z.B. letzte 14 Tage) wenn keine Parameter angegeben sind
+                LocalDate today = LocalDate.now();
+                LocalDate defaultFrom = today.minusDays(13);
+
+                if (fromDateStr != null && !fromDateStr.isEmpty()) {
+                    fromTimestamp = Timestamp.valueOf(fromDateStr + " 00:00:00");
+                } else {
+                    fromTimestamp = Timestamp.valueOf(defaultFrom.atStartOfDay());
+                }
+                if (toDateStr != null && !toDateStr.isEmpty()) {
+                    toTimestamp = Timestamp.valueOf(toDateStr + " 23:59:59");
+                } else {
+                    toTimestamp = Timestamp.valueOf(today.atTime(23, 59, 59));
+                }
+
+                // Abruf der Statistikdaten aus dem Manager
+                List<TagesStatistik> statistik = wareneingangManager.getWareneingaengeProTag(fromTimestamp, toTimestamp);
+
+                if (statistik.isEmpty()) {
+                    return ResponseEntity.noContent().build();
+                }
+
+                // Weiterverarbeitung analog zu WarenausgaengeProTag, z.B. Aufbereitung pro Produkt und Tag...
+                // Hier können Sie den Code aus der vorherigen getWarenausgaengeProTag-Methode anpassen.
+
+                // Beispiel: Trennung in dates und data, gruppiert nach Produkt (analog wie zuvor)
+                List<Product> alleProdukte = productManager.readProducts(null, null);
+
+                LocalDate startDate = fromTimestamp.toLocalDateTime().toLocalDate();
+                LocalDate endDate = toTimestamp.toLocalDateTime().toLocalDate();
+                List<LocalDate> tageImZeitraum = new ArrayList<>();
+                for (LocalDate d = startDate; !d.isAfter(endDate); d = d.plusDays(1)) {
+                    tageImZeitraum.add(d);
+                }
+
+                Map<String, List<Integer>> produktDaten = new HashMap<>();
+                for (Product produkt : alleProdukte) {
+                    List<Integer> zahlenListe = new ArrayList<>();
+                    for (int i = 0; i < tageImZeitraum.size(); i++) {
+                        zahlenListe.add(0);
+                    }
+                    produktDaten.put(produkt.getProductName(), zahlenListe);
+                }
+
+                List<String> dates = new ArrayList<>();
+                for (LocalDate tag : tageImZeitraum) {
+                    dates.add(tag.format(outputFmt));
+                }
+
+                for (TagesStatistik ts : statistik) {
+                    LocalDate datum = LocalDate.parse(ts.getDatum(), inputFmt);
+                    int index = tageImZeitraum.indexOf(datum);
+                    if (index != -1) {
+                        String produktName = ts.getProduktName();
+                        List<Integer> zahlenListe = produktDaten.get(produktName);
+                        if (zahlenListe != null) {
+                            zahlenListe.set(index, ts.getAnzahl());
+                        }
+                    }
+                }
+
+                Map<String, Object> response = new HashMap<>();
+                response.put("dates", dates);
+                response.put("data", produktDaten);
+
+                return ResponseEntity.ok(response);
+            } catch (Exception e) {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body("Fehler beim Abrufen der Tagesstatistik für Wareneingänge: " + e.getMessage());
+            }
+        }
+
+
 
     }

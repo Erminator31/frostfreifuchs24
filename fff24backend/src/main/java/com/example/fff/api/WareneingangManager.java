@@ -1,5 +1,6 @@
 package com.example.fff.api;
 
+import com.example.fff.model.TagesStatistik;
 import com.example.fff.model.Wareneingang;
 import com.example.fff.model.WareneingangItem;
 
@@ -16,4 +17,6 @@ public interface WareneingangManager {
     List<Wareneingang> getAllWareneingaenge() throws Exception;
     void deleteWareneingangTable() throws SQLException;
     void deleteWareneingangItemsTable() throws SQLException;
+
+    List<TagesStatistik> getWareneingaengeProTag(Timestamp from, Timestamp to) throws Exception;
 }

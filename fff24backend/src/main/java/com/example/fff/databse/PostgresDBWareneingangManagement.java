@@ -1,6 +1,7 @@
 package com.example.fff.databse;
 
 import com.example.fff.api.WareneingangManager;
+import com.example.fff.model.TagesStatistik;
 import com.example.fff.model.Wareneingang;
 import com.example.fff.model.WareneingangItem;
 import org.apache.commons.dbcp.BasicDataSource;
@@ -255,4 +256,47 @@ public class PostgresDBWareneingangManagement implements WareneingangManager {
             stmt.execute("DROP TABLE IF EXISTS wareneingang_items CASCADE;");
         }
     }
+
+    @Override
+    public List<TagesStatistik> getWareneingaengeProTag(Timestamp from, Timestamp to) throws Exception {
+        List<TagesStatistik> statistikListe = new ArrayList<>();
+        // Erweiterte SQL-Abfrage mit Produktinformation:
+        String sql = "SELECT DATE(wg.warenausgangdate) AS tag, p.productname, COUNT(*) AS anzahl " +
+                "FROM wareneingaenge wg " +
+                "JOIN wareneingang_items wi ON wg.wareneingangid = wi.wareneingangid " +
+                "JOIN products p ON wi.productid = p.productid " +
+                "WHERE 1=1";
+
+        if (from != null) {
+            sql += " AND wg.warenausgangdate >= ?";
+        }
+        if (to != null) {
+            sql += " AND wg.warenausgangdate <= ?";
+        }
+        sql += " GROUP BY DATE(wg.warenausgangdate), p.productname " +
+                "ORDER BY DATE(wg.warenausgangdate), p.productname";
+
+        try (Connection connection = basicDataSource.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
+
+            int paramIndex = 1;
+            if (from != null) {
+                stmt.setTimestamp(paramIndex++, from);
+            }
+            if (to != null) {
+                stmt.setTimestamp(paramIndex++, to);
+            }
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    String tag = rs.getString("tag");
+                    String produktName = rs.getString("productname");
+                    int anzahl = rs.getInt("anzahl");
+                    statistikListe.add(new TagesStatistik(tag, anzahl, produktName));
+                }
+            }
+        }
+        return statistikListe;
+    }
+
 }
