@@ -261,17 +261,17 @@ public class PostgresDBWareneingangManagement implements WareneingangManager {
     public List<TagesStatistik> getWareneingaengeProTag(Timestamp from, Timestamp to) throws Exception {
         List<TagesStatistik> statistikListe = new ArrayList<>();
         // Erweiterte SQL-Abfrage mit Produktinformation:
-        String sql = "SELECT DATE(wg.warenausgangdate) AS tag, p.productname, COUNT(*) AS anzahl " +
+        String sql = "SELECT DATE(wg.wareneingangdate) AS tag, p.productname, COUNT(*) AS anzahl " +
                 "FROM wareneingaenge wg " +
                 "JOIN wareneingang_items wi ON wg.wareneingangid = wi.wareneingangid " +
                 "JOIN products p ON wi.productid = p.productid " +
                 "WHERE 1=1";
 
         if (from != null) {
-            sql += " AND wg.warenausgangdate >= ?";
+            sql += " AND wg.wareneingangdate >= ?";
         }
         if (to != null) {
-            sql += " AND wg.warenausgangdate <= ?";
+            sql += " AND wg.wareneingangdate <= ?";
         }
         sql += " GROUP BY DATE(wg.wareneingangdate), p.productname " +
                 "ORDER BY DATE(wg.wareneingangdate), p.productname";
