@@ -334,16 +334,21 @@ public class PostgresDBWarenausgangManagement implements WarenausgangManager {
     @Override
     public List<TagesStatistik> getWarenausgaengeProTag(Timestamp from, Timestamp to) throws Exception {
         List<TagesStatistik> statistikListe = new ArrayList<>();
-        String sql = "SELECT DATE(warenausgangdate) AS tag, COUNT(*) AS anzahl " +
-                "FROM warenausgaenge " +
+        // Erweiterte SQL-Abfrage mit Produktinformation:
+        String sql = "SELECT DATE(w.warenausgangdate) AS tag, p.productname, COUNT(*) AS anzahl " +
+                "FROM warenausgaenge w " +
+                "JOIN warenausgang_items wi ON w.warenausgangid = wi.warenausgangid " +
+                "JOIN products p ON wi.productid = p.productid " +
                 "WHERE 1=1";
+
         if (from != null) {
-            sql += " AND warenausgangdate >= ?";
+            sql += " AND w.warenausgangdate >= ?";
         }
         if (to != null) {
-            sql += " AND warenausgangdate <= ?";
+            sql += " AND w.warenausgangdate <= ?";
         }
-        sql += " GROUP BY DATE(warenausgangdate) ORDER BY DATE(warenausgangdate)";
+        sql += " GROUP BY DATE(w.warenausgangdate), p.productname " +
+                "ORDER BY DATE(w.warenausgangdate), p.productname";
 
         try (Connection connection = basicDataSource.getConnection();
              PreparedStatement stmt = connection.prepareStatement(sql)) {
@@ -359,13 +364,16 @@ public class PostgresDBWarenausgangManagement implements WarenausgangManager {
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
                     String tag = rs.getString("tag");
+                    String produktName = rs.getString("productname");
                     int anzahl = rs.getInt("anzahl");
-                    statistikListe.add(new TagesStatistik(tag, anzahl));
+                    // Erstelle ein TagesStatistik-Objekt mit Datum, Anzahl und Produktname
+                    statistikListe.add(new TagesStatistik(tag, anzahl, produktName));
                 }
             }
         }
         return statistikListe;
     }
+
 
 
 }

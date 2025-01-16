@@ -3,25 +3,17 @@ package com.example.fff.model;
 public class TagesStatistik {
     private String datum;
     private int anzahl;
+    private String produktName; // oder productId
 
-    public TagesStatistik(String datum, int anzahl) {
+    // Konstruktor, Getter und Setter
+    public TagesStatistik(String datum, int anzahl, String produktName) {
         this.datum = datum;
         this.anzahl = anzahl;
+        this.produktName = produktName;
     }
 
-    public String getDatum() {
-        return datum;
-    }
-
-    public void setDatum(String datum) {
-        this.datum = datum;
-    }
-
-    public int getAnzahl() {
-        return anzahl;
-    }
-
-    public void setAnzahl(int anzahl) {
-        this.anzahl = anzahl;
-    }
+    public String getDatum() { return datum; }
+    public int getAnzahl() { return anzahl; }
+    public String getProduktName() { return produktName; }
 }
+

@@ -890,38 +890,74 @@
                 // Konvertierung der Datumsstrings in Timestamps
                 Timestamp fromTimestamp = null;
                 Timestamp toTimestamp = null;
+                DateTimeFormatter inputFmt  = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+                DateTimeFormatter outputFmt = DateTimeFormatter.ofPattern("dd. MM. yyyy");
+
+                // Setze Standardzeitraum auf letzte 14 Tage, falls keine Parameter angegeben sind
+                LocalDate today = LocalDate.now();
+                LocalDate defaultFrom = today.minusDays(13); // insgesamt 14 Tage inklusive heute
+
                 if (fromDateStr != null && !fromDateStr.isEmpty()) {
                     fromTimestamp = Timestamp.valueOf(fromDateStr + " 00:00:00");
+                } else {
+                    fromTimestamp = Timestamp.valueOf(defaultFrom.atStartOfDay());
                 }
                 if (toDateStr != null && !toDateStr.isEmpty()) {
                     toTimestamp = Timestamp.valueOf(toDateStr + " 23:59:59");
+                } else {
+                    toTimestamp = Timestamp.valueOf(today.atTime(23, 59, 59));
                 }
 
                 // Abruf der Statistikdaten aus dem Manager
                 List<TagesStatistik> statistik = warenausgangManager.getWarenausgaengeProTag(fromTimestamp, toTimestamp);
 
-                if (statistik.isEmpty()) {
-                    return ResponseEntity.noContent().build();
+                // Alle Produkte laden
+                List<Product> alleProdukte = productManager.readProducts(null, null);
+
+                // Erstellen einer Liste aller Tage im Zeitraum
+                LocalDate startDate = fromTimestamp.toLocalDateTime().toLocalDate();
+                LocalDate endDate = toTimestamp.toLocalDateTime().toLocalDate();
+                List<LocalDate> tageImZeitraum = new ArrayList<>();
+                for (LocalDate d = startDate; !d.isAfter(endDate); d = d.plusDays(1)) {
+                    tageImZeitraum.add(d);
                 }
 
-                // Separiere Daten in zwei Listen: dates und data
+                // Initialisiere Datenstruktur: Für jedes Produkt, für jeden Tag 0
+                Map<String, List<Integer>> produktDaten = new HashMap<>();
+                for (Product produkt : alleProdukte) {
+                    List<Integer> zahlenListe = new ArrayList<>();
+                    for (int i = 0; i < tageImZeitraum.size(); i++) {
+                        zahlenListe.add(0);
+                    }
+                    produktDaten.put(produkt.getProductName(), zahlenListe);
+                }
+
+                // Erstelle Liste der formatierten Datumsstrings für die Antwort
                 List<String> dates = new ArrayList<>();
-                List<Integer> data = new ArrayList<>();
-                DateTimeFormatter inputFmt  = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-                DateTimeFormatter outputFmt = DateTimeFormatter.ofPattern("dd. MM. yyyy");
-
-                for (TagesStatistik ts : statistik) {
-                    // Konvertiere das Datum ins gewünschte Format
-                    LocalDate parsedDate = LocalDate.parse(ts.getDatum(), inputFmt);
-                    dates.add(parsedDate.format(outputFmt));
-
-                    data.add(ts.getAnzahl());
+                for (LocalDate tag : tageImZeitraum) {
+                    dates.add(tag.format(outputFmt));
                 }
 
-                // Erstelle die Antwortstruktur
+                // Fülle die Daten aus den Statistik-Ergebnissen
+                for (TagesStatistik ts : statistik) {
+                    // Datum parsen (im Format "yyyy-MM-dd")
+                    LocalDate datum = LocalDate.parse(ts.getDatum(), inputFmt);
+                    // Index des Tages in der Liste der Tage finden
+                    int index = tageImZeitraum.indexOf(datum);
+                    if (index != -1) {
+                        String produktName = ts.getProduktName();
+                        List<Integer> zahlenListe = produktDaten.get(produktName);
+                        if (zahlenListe != null) {
+                            // Setze die Anzahl für den entsprechenden Tag
+                            zahlenListe.set(index, ts.getAnzahl());
+                        }
+                    }
+                }
+
+                // Baue die finale Antwortstruktur
                 Map<String, Object> response = new HashMap<>();
                 response.put("dates", dates);
-                response.put("data", data);
+                response.put("data", produktDaten);
 
                 return ResponseEntity.ok(response);
             } catch (Exception e) {
