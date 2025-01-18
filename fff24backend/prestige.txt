@@ -46,26 +46,24 @@ Content-Type: application/json
 POST https://backend-frostfreifuchs-b240fdbecd00.herokuapp.com/api/product/add
 Content-Type: application/json
 
-Body-Beispiel:
 {
   "productName": "Produkt A",
   "productType": "Typ X",
   "productQuantity": 100
 }
 
-### Produkte abrufen (GET /products)  
+### Produkte abrufen (GET /products)
 GET https://backend-frostfreifuchs-b240fdbecd00.herokuapp.com/api/products?productName=ProduktA&productType=TypX
 Content-Type: application/json
 
-### Produkt löschen (DELETE /product/delete/{id})  
+### Produkt löschen (DELETE /product/delete/{id})
 DELETE https://backend-frostfreifuchs-b240fdbecd00.herokuapp.com/api/product/delete/1
 Content-Type: application/json
 
-### Warenausgang erstellen (POST /warenausgang)  
+### Warenausgang erstellen (POST /warenausgang)
 POST https://backend-frostfreifuchs-b240fdbecd00.herokuapp.com/api/warenausgang?warenausgangDate=2025-01-12T10:00:00
 Content-Type: application/json
 
-Body-Beispiel:
 {
   "items": [
     { "productId": 1, "quantity": 50 },
@@ -73,45 +71,52 @@ Body-Beispiel:
   ]
 }
 
-### Warenausgang abrufen (GET /warenausgang/{id})  
+### Warenausgang abrufen (GET /warenausgang/{id})
 GET https://backend-frostfreifuchs-b240fdbecd00.herokuapp.com/api/warenausgang/1
 Content-Type: application/json
 
-### Alle Warenausgänge abrufen (GET /warenausgaenge)  
+### Alle Warenausgänge abrufen (GET /warenausgaenge)
 GET https://backend-frostfreifuchs-b240fdbecd00.herokuapp.com/api/warenausgaenge?from=2025-01-01&to=2025-01-31
 Content-Type: application/json
 
-### Historische Daten generieren (GET /generate-history)  
+### Historische Daten generieren (GET /generate-history)
 GET https://backend-frostfreifuchs-b240fdbecd00.herokuapp.com/api/generate-history?year=2024&month=1
 Content-Type: application/json
 
-### Tägliche Nachfrage aktualisieren (GET /update-daily-demand)  
+### Tägliche Nachfrage aktualisieren (GET /update-daily-demand)
 GET https://backend-frostfreifuchs-b240fdbecd00.herokuapp.com/api/update-daily-demand
 Content-Type: application/json
 
-### Alle Wareneingänge abrufen (GET /wareneingaenge)  
+### Alle Wareneingänge abrufen (GET /wareneingaenge)
 GET https://backend-frostfreifuchs-b240fdbecd00.herokuapp.com/api/wareneingaenge
 Content-Type: application/json
 
-### Wareneingang erstellen (POST /wareneingang)  
+### Wareneingang erstellen (POST /wareneingang)
 POST https://backend-frostfreifuchs-b240fdbecd00.herokuapp.com/api/wareneingang?wareneingangDate=2025-01-12T11:00:00
 Content-Type: application/json
 
-Body-Beispiel:
 {
   "items": [
     { "productId": 1, "quantity": 100 }
   ]
 }
 
-### Forecast abrufen (GET /forecast)  
+### Forecast abrufen (GET /forecast)
 GET https://backend-frostfreifuchs-b240fdbecd00.herokuapp.com/api/forecast?forecastDays=14&alpha=0.5&beta=0.3&gamma=0.2
 Content-Type: application/json
 
-### Forecast Weights Tabelle erstellen (GET /create-forecast-weights-table)  
+### Forecast Weights Tabelle erstellen (GET /create-forecast-weights-table)
 GET https://backend-frostfreifuchs-b240fdbecd00.herokuapp.com/api/create-forecast-weights-table
 Content-Type: application/json
 
-### Warenausgänge pro Tag abrufen (GET /warenausgaenge/pro-tag)  
+### Warenausgänge pro Tag abrufen (GET /warenausgaenge/pro-tag)
 GET https://backend-frostfreifuchs-b240fdbecd00.herokuapp.com/api/warenausgaenge/pro-tag?from=2025-01-01&to=2025-01-31
 Content-Type: application/json
+### Produktdaten aktualisieren (PATCH /product/update/{id})
+PATCH https://backend-frostfreifuchs-b240fdbecd00.herokuapp.com/api/product/update/1
+Content-Type: application/json
+
+{
+  "dailyDemand": 600,
+  "productQuantity": 1500
+}

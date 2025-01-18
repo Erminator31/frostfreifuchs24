@@ -5,6 +5,7 @@ import com.example.fff.model.Product;
 
 import java.sql.SQLException;
 import java.util.List;
+import java.util.Map;
 
 public interface ProductManager {
     void createProductTable() throws Exception;
@@ -34,4 +35,6 @@ public interface ProductManager {
     void updateForecastWeights(double alpha, double beta, double gamma) throws SQLException;
 
     void createForecastWeightsTable() throws SQLException;
+
+    void updateProductPartial(int productId, Map<String, Object> updates) throws SQLException;
 }

@@ -1049,6 +1049,32 @@
             }
         }
 
+        @PatchMapping("/product/update/{id}")
+        public ResponseEntity<?> patchProduct(
+                @PathVariable("id") int productId,
+                @RequestBody Map<String, Object> updates) {
+            Logger.getLogger("MappingController").log(Level.INFO, "Patching product with ID " + productId);
+            try {
+                // Prüfen, ob das Produkt existiert
+                Product existing = productManager.readProductById(productId);
+                if (existing == null) {
+                    return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Product not found");
+                }
+
+                // Führe das partielle Update durch
+                productManager.updateProductPartial(productId, updates);
+
+                Map<String, String> response = new HashMap<>();
+                response.put("message", "Product updated successfully.");
+                return ResponseEntity.ok(response);
+
+            } catch (SQLException e) {
+                Logger.getLogger("MappingController").log(Level.SEVERE, "Error patching product: " + e.getMessage(), e);
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body("Error updating product: " + e.getMessage());
+            }
+        }
+
 
 
     }

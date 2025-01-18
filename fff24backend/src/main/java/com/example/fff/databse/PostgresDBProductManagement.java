@@ -9,26 +9,27 @@
         import java.sql.*;
         import java.util.ArrayList;
         import java.util.List;
+        import java.util.Map;
         import java.util.logging.Level;
         import java.util.logging.Logger;
     
         @Service
         public class PostgresDBProductManagement implements ProductManager {
             // Database connection details
-        // Database connection details
+            // Database connection details
             String databaseURL = "jdbc:postgresql://c7u1tn6bvvsodf.cluster-czz5s0kz4scl.eu-west-1.rds.amazonaws.com:5432/d1t207hd56v54?sslmode=require";
             String username = "u3t73itv4ifknl";
             String password = "pc8d79bc3deea2ca2b99f04d14057aeb257bac911861af2c1c3f890ffecaa803c";
-    
-    
+
+
             BasicDataSource basicDataSource;
-    
+
             // Singleton pattern for the manager implementation
             private static PostgresDBProductManagement postgresDBProductManagement = null;
-    
+
             private static final Logger LOGGER = Logger.getLogger(PostgresDBProductManagement.class.getName());
-    
-    
+
+
             /**
              * Constructor for PostgresDBProductManagement class.
              * Initializes the basicDataSource with the provided database URL, username, and password.
@@ -39,12 +40,12 @@
                 basicDataSource.setUsername(username);
                 basicDataSource.setPassword(password);
             }
-    
+
             /**
              * Closes the provided resources including ResultSet, PreparedStatement, and Connection.
              *
-             * @param rs The ResultSet to be closed.
-             * @param stmt The PreparedStatement to be closed.
+             * @param rs         The ResultSet to be closed.
+             * @param stmt       The PreparedStatement to be closed.
              * @param connection The Connection to be closed.
              */
             private void closeResources(ResultSet rs, PreparedStatement stmt, Connection connection) {
@@ -63,7 +64,7 @@
                     e.printStackTrace();
                 }
             }
-    
+
             /**
              * Retrieves the instance of PostgresDBProductManagement. If the instance does not exist, a new one is created.
              *
@@ -75,7 +76,7 @@
                 }
                 return postgresDBProductManagement;
             }
-    
+
             /**
              * Creates an 'events' table in the database if it doesn't already exist.
              *
@@ -95,7 +96,7 @@
                         + "reorder_point INT DEFAULT 250, " // daily_demand * 3
                         + "reorder_quantity INT DEFAULT 250" // Beispielwert, kann angepasst werden
                         + ");";
-    
+
                 try {
                     connection = basicDataSource.getConnection();
                     pstmt = connection.prepareStatement(createTableSQL);
@@ -109,15 +110,15 @@
                         connection.close();
                 }
             }
-    
+
             @Override
             public Product readProductById(int productId) throws SQLException {
                 String sql = "SELECT productid, productname, producttype, quantity, daily_demand, reorder_point FROM products WHERE productid = ?";
-    
+
                 try (Connection connection = basicDataSource.getConnection();
                      PreparedStatement stmt = connection.prepareStatement(sql)) {
                     stmt.setInt(1, productId);
-    
+
                     try (ResultSet rs = stmt.executeQuery()) {
                         if (rs.next()) {
                             return new Product(
@@ -133,40 +134,40 @@
                 }
                 return null;
             }
-    
+
             @Override
             public Product addProduct(String productName, String productType, int quantity) throws Exception {
                 // Initialer daily_demand ist 1000
                 int initialDailyDemand = 35;
                 return addProduct(productName, productType, quantity, initialDailyDemand, initialDailyDemand * 7); // reorderPoint = dailyDemand * 3
             }
-    
+
             /**
              * Erweiterte Methode zum Hinzufügen eines Produkts mit spezifischen Reorder-Parametern.
              *
-             * @param productName     Der Name des Produkts.
-             * @param productType     Der Typ des Produkts.
-             * @param quantity        Die Menge, die hinzugefügt werden soll.
-             * @param dailyDemand     Der tägliche Bedarf.
-             * @param reorderPoint    Der Reorder Point (dailyDemand * 7).
+             * @param productName  Der Name des Produkts.
+             * @param productType  Der Typ des Produkts.
+             * @param quantity     Die Menge, die hinzugefügt werden soll.
+             * @param dailyDemand  Der tägliche Bedarf.
+             * @param reorderPoint Der Reorder Point (dailyDemand * 7).
              * @return Das erstellte oder aktualisierte Produkt.
              * @throws Exception Wenn ein Fehler auftritt.
              */
             public Product addProduct(String productName, String productType, int quantity, int dailyDemand, int reorderPoint) throws Exception {
                 final Logger createProductLogger = Logger.getLogger("CreateProductLogger");
                 createProductLogger.log(Level.INFO, "Start creating or updating product: " + productName + " with quantity " + quantity);
-    
+
                 Connection connection = null;
                 PreparedStatement checkProductStmt = null;
                 PreparedStatement insertStmt = null;
                 PreparedStatement updateStmt = null;
                 PreparedStatement sumStmt = null;
                 ResultSet rs = null;
-    
+
                 try {
                     connection = basicDataSource.getConnection();
                     connection.setAutoCommit(false);
-    
+
                     // Aktuelle Gesamtmenge im Lager prüfen (Maximal 20000)
                     String sumSQL = "SELECT COALESCE(SUM(quantity), 0) AS total_quantity FROM products";
                     sumStmt = connection.prepareStatement(sumSQL);
@@ -177,19 +178,19 @@
                     }
                     rs.close();
                     sumStmt.close();
-    
+
                     if (currentTotalQuantity + quantity > 200000) {
                         connection.rollback();
                         throw new Exception("Cannot add product. Adding " + quantity + " units would exceed the total warehouse capacity of 20000.");
                     }
-    
+
                     // Prüfen, ob das Produkt bereits existiert
                     String checkProductSQL = "SELECT productid, quantity, daily_demand, reorder_point FROM products WHERE productname = ? AND producttype = ?";
                     checkProductStmt = connection.prepareStatement(checkProductSQL);
                     checkProductStmt.setString(1, productName);
                     checkProductStmt.setString(2, productType);
                     rs = checkProductStmt.executeQuery();
-    
+
                     if (rs.next()) {
                         // Produkt existiert bereits, Menge erhöhen und Reorder-Parameter aktualisieren
                         int productId = rs.getInt("productid");
@@ -197,13 +198,13 @@
                         int currentDailyDemand = rs.getInt("daily_demand");
                         rs.close();
                         checkProductStmt.close();
-    
+
                         int newDailyDemand = (currentDailyDemand + dailyDemand) / 2; // Durchschnittlicher täglicher Bedarf
                         int newReorderPoint = newDailyDemand * 7;
                         int newReorderQuantity = newDailyDemand * 14;
-    
+
                         int newQuantity = currentQuantity + quantity;
-    
+
                         String updateSQL = "UPDATE products SET quantity = ?, daily_demand = ?, reorder_point = ?, reorder_quantity = ? WHERE productid = ?";
                         updateStmt = connection.prepareStatement(updateSQL);
                         updateStmt.setInt(1, newQuantity);
@@ -216,15 +217,15 @@
                             connection.rollback();
                             throw new SQLException("Updating product failed, no rows affected.");
                         }
-    
+
                         connection.commit();
                         return new Product(productId, productName, productType, newQuantity, newDailyDemand, newReorderPoint);
-    
+
                     } else {
                         // Produkt existiert nicht, neu anlegen
                         rs.close();
                         checkProductStmt.close();
-    
+
                         String insertSQL = "INSERT INTO products (productname, producttype, quantity, daily_demand, reorder_point, reorder_quantity) VALUES (?, ?, ?, ?, ?, ?) RETURNING productid;";
                         insertStmt = connection.prepareStatement(insertSQL);
                         insertStmt.setString(1, productName);
@@ -233,7 +234,7 @@
                         insertStmt.setInt(4, dailyDemand);
                         insertStmt.setInt(5, reorderPoint);
                         insertStmt.setInt(6, dailyDemand * 14); // reorderQuantity = dailyDemand * 14
-    
+
                         rs = insertStmt.executeQuery();
                         int generatedId = -1;
                         if (rs.next()) {
@@ -242,11 +243,11 @@
                             connection.rollback();
                             throw new SQLException("Creating product failed, no ID obtained.");
                         }
-    
+
                         connection.commit();
                         return new Product(generatedId, productName, productType, quantity, dailyDemand, reorderPoint);
                     }
-    
+
                 } catch (Exception e) {
                     if (connection != null) {
                         connection.rollback();
@@ -260,10 +261,8 @@
                     if (connection != null) connection.close();
                 }
             }
-    
-    
-    
-    
+
+
             /**
              * Retrieves a list of products based on the specified filters.
              *
@@ -275,16 +274,16 @@
             public List<Product> readProducts(String productName, String productType) {
                 final Logger readProductLogger = Logger.getLogger("ReadProductLogger");
                 readProductLogger.log(Level.INFO, "Start reading products with filters name=" + productName + " type=" + productType);
-    
+
                 List<Product> products = new ArrayList<>();
-    
+
                 // Dynamische Abfrage bauen
                 StringBuilder queryBuilder = new StringBuilder("SELECT * FROM products");
                 List<Object> parameters = new ArrayList<>();
-    
+
                 boolean hasNameFilter = productName != null && !productName.trim().isEmpty();
                 boolean hasTypeFilter = productType != null && !productType.trim().isEmpty();
-    
+
                 if (hasNameFilter || hasTypeFilter) {
                     queryBuilder.append(" WHERE");
                 }
@@ -299,15 +298,15 @@
                     queryBuilder.append(" producttype ILIKE ?");
                     parameters.add("%" + productType + "%");
                 }
-    
+
                 try (Connection connection = basicDataSource.getConnection();
                      PreparedStatement stmt = connection.prepareStatement(queryBuilder.toString())) {
-    
+
                     // Parameter setzen
                     for (int i = 0; i < parameters.size(); i++) {
                         stmt.setObject(i + 1, parameters.get(i));
                     }
-    
+
                     try (ResultSet rs = stmt.executeQuery()) {
                         while (rs.next()) {
                             products.add(new Product(
@@ -317,18 +316,18 @@
                                     rs.getInt("quantity"),
                                     rs.getInt("daily_demand"),
                                     rs.getInt("reorder_point")
-    
+
                             ));
                         }
                     }
-    
+
                 } catch (SQLException e) {
                     readProductLogger.log(Level.SEVERE, "Error reading products", e);
                 }
-    
+
                 return products;
             }
-    
+
             /**
              * Removes a product from the database based on the provided product ID.
              *
@@ -339,42 +338,50 @@
             public boolean removeProduct(int productId) {
                 final Logger removeProductLogger = Logger.getLogger("RemoveProductLogger");
                 removeProductLogger.log(Level.INFO, "Start removing product with ID: " + productId);
-    
+
                 Connection connection = null;
                 PreparedStatement stmt = null;
-    
+
                 String deleteSQL = "DELETE FROM products WHERE productid = ?";
-    
+
                 try {
                     connection = basicDataSource.getConnection();
                     stmt = connection.prepareStatement(deleteSQL);
                     stmt.setInt(1, productId);
-    
+
                     int affectedRows = stmt.executeUpdate();
                     // affectedRows sollte 1 sein, wenn genau ein Produkt entfernt wurde.
                     return affectedRows == 1;
-    
+
                 } catch (SQLException e) {
                     e.printStackTrace();
                 } finally {
                     // Ressourcen freigeben
                     if (stmt != null) {
-                        try { stmt.close(); } catch (SQLException e) { e.printStackTrace(); }
+                        try {
+                            stmt.close();
+                        } catch (SQLException e) {
+                            e.printStackTrace();
+                        }
                     }
                     if (connection != null) {
-                        try { connection.close(); } catch (SQLException e) { e.printStackTrace(); }
+                        try {
+                            connection.close();
+                        } catch (SQLException e) {
+                            e.printStackTrace();
+                        }
                     }
                 }
-    
+
                 return false; // Wenn ein Fehler auftritt oder kein Produkt gefunden wurde
             }
-    
-        @Override
+
+            @Override
             public void deleteProductsTable() throws SQLException {
                 Connection connection = null;
                 Statement stmt = null;
                 String dropTableSQL = "DROP TABLE IF EXISTS products CASCADE;";
-    
+
                 try {
                     connection = basicDataSource.getConnection();
                     stmt = connection.createStatement();
@@ -389,54 +396,54 @@
                 }
             }
             // Ergänzen Sie die bestehende Klasse mit der updateDailyDemand Methode
-    
+
             @Override
             public void updateDailyDemand() throws Exception {
                 final Logger updateDemandLogger = Logger.getLogger("UpdateDemandLogger");
                 updateDemandLogger.log(Level.INFO, "Start updating dailyDemand for all products.");
-    
+
                 Connection connection = null;
                 PreparedStatement selectProductsStmt = null;
                 PreparedStatement updateProductStmt = null;
                 ResultSet rs = null;
-    
+
                 try {
                     connection = basicDataSource.getConnection();
                     connection.setAutoCommit(false);
-    
+
                     // Alle Produkte abrufen
                     String selectProductsSQL = "SELECT productid FROM products;";
                     selectProductsStmt = connection.prepareStatement(selectProductsSQL);
                     rs = selectProductsStmt.executeQuery();
-    
+
                     List<Integer> productIds = new ArrayList<>();
                     while (rs.next()) {
                         productIds.add(rs.getInt("productid"));
                     }
                     rs.close();
                     selectProductsStmt.close();
-    
+
                     // Vorbereitung des Update-Statements
                     String updateProductSQL = "UPDATE products SET daily_demand = ?, reorder_point = ?, reorder_quantity = ? WHERE productid = ?;";
                     updateProductStmt = connection.prepareStatement(updateProductSQL);
-    
+
                     PostgresDBWarenausgangManagement orderManager = PostgresDBWarenausgangManagement.getInstance();
-    
+
                     for (int productId : productIds) {
                         double avgDailyDemand = orderManager.calculateAverageDailyDemand(productId, connection);
                         int newDailyDemand = (int) Math.round(avgDailyDemand);
                         int newReorderPoint = newDailyDemand * 7;
                         int newReorderQuantity = newDailyDemand * 14;
-    
+
                         updateProductStmt.setInt(1, newDailyDemand);
                         updateProductStmt.setInt(2, newReorderPoint);
                         updateProductStmt.setInt(3, newReorderQuantity);
                         updateProductStmt.setInt(4, productId);
                         updateProductStmt.addBatch();
-    
+
                         updateDemandLogger.log(Level.INFO, "Updated Product ID " + productId + ": dailyDemand=" + newDailyDemand + ", reorderPoint=" + newReorderPoint + ", reorderQuantity=" + newReorderQuantity);
                     }
-    
+
                     // Batch-Update ausführen
                     updateProductStmt.executeBatch();
                     connection.commit();
@@ -454,7 +461,7 @@
                     if (connection != null) connection.close();
                 }
             }
-    
+
             @Override
             public void updateProductForecastValues(Product product,
                                                     int newDailyDemand,
@@ -484,8 +491,8 @@
                     if (connection != null) connection.close();
                 }
             }
-    
-         @Override
+
+            @Override
             public ForecastWeights getForecastWeights() throws SQLException {
                 String sql = "SELECT alpha, beta, gamma FROM forecast_weights WHERE id=1";
                 try (Connection connection = basicDataSource.getConnection();
@@ -493,7 +500,7 @@
                      ResultSet rs = stmt.executeQuery(sql)) {
                     if (rs.next()) {
                         double alpha = rs.getDouble("alpha");
-                        double beta  = rs.getDouble("beta");
+                        double beta = rs.getDouble("beta");
                         double gamma = rs.getDouble("gamma");
                         return new ForecastWeights(alpha, beta, gamma);
                     } else {
@@ -502,8 +509,8 @@
                     }
                 }
             }
-    
-    
+
+
             @Override
             public void updateForecastWeights(double alpha, double beta, double gamma) throws SQLException {
                 String sql = "UPDATE forecast_weights SET alpha=?, beta=?, gamma=? WHERE id=1";
@@ -525,7 +532,7 @@
                     }
                 }
             }
-    
+
             @Override
             public void createForecastWeightsTable() throws SQLException {
                 String createTableSQL = """
@@ -536,11 +543,11 @@
                 gamma DOUBLE PRECISION NOT NULL DEFAULT 1.0
             );
         """;
-    
+
                 try (Connection connection = basicDataSource.getConnection();
                      Statement stmt = connection.createStatement()) {
                     stmt.execute(createTableSQL);
-    
+
                     // Optional: gleich einen Default-Datensatz (id=1) anlegen, falls nicht vorhanden
                     String insertDefaultSQL = """
                 INSERT INTO forecast_weights (id, alpha, beta, gamma)
@@ -550,6 +557,53 @@
                     stmt.execute(insertDefaultSQL);
                 }
             }
-    
-    
+
+
+            @Override
+            public void updateProductPartial(int productId, Map<String, Object> updates) throws SQLException {
+                // Erstelle dynamisch das SQL-Update-Statement basierend auf den übergebenen Feldern
+                StringBuilder sql = new StringBuilder("UPDATE products SET ");
+                List<Object> params = new ArrayList<>();
+
+                // Prüfe jedes mögliche Feld in der Map und füge es zur SQL-Abfrage hinzu, falls vorhanden
+                if (updates.containsKey("dailyDemand")) {
+                    sql.append("daily_demand = ?, ");
+                    params.add(updates.get("dailyDemand"));
+                }
+                if (updates.containsKey("reorderPoint")) {
+                    sql.append("reorder_point = ?, ");
+                    params.add(updates.get("reorderPoint"));
+                }
+                if (updates.containsKey("reorderQuantity")) {
+                    sql.append("reorder_quantity = ?, ");
+                    params.add(updates.get("reorderQuantity"));
+                }
+                if (updates.containsKey("productQuantity")) {
+                    sql.append("quantity = ?, ");
+                    params.add(updates.get("productQuantity"));
+                }
+
+                // Entferne das letzte Komma und Leerzeichen
+                if (params.isEmpty()) {
+                    // Falls keine Aktualisierungen übergeben wurden, beenden
+                    return;
+                }
+                sql.setLength(sql.length() - 2);
+
+                sql.append(" WHERE productid = ?");
+                params.add(productId);
+
+                try (Connection connection = basicDataSource.getConnection();
+                     PreparedStatement stmt = connection.prepareStatement(sql.toString())) {
+                    // Setze Parameter in der PreparedStatement
+                    for (int i = 0; i < params.size(); i++) {
+                        stmt.setObject(i + 1, params.get(i));
+                    }
+                    int affectedRows = stmt.executeUpdate();
+                    if (affectedRows == 0) {
+                        throw new SQLException("Updating product failed, no rows affected.");
+                    }
+                }
+            }
         }
+
