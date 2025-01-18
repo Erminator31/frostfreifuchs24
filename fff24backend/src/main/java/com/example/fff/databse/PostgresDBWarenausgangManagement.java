@@ -334,8 +334,8 @@ public class PostgresDBWarenausgangManagement implements WarenausgangManager {
     @Override
     public List<TagesStatistik> getWarenausgaengeProTag(Timestamp from, Timestamp to) throws Exception {
         List<TagesStatistik> statistikListe = new ArrayList<>();
-        // Erweiterte SQL-Abfrage mit Produktinformation:
-        String sql = "SELECT DATE(w.warenausgangdate) AS tag, p.productname, COUNT(*) AS anzahl " +
+        // Erweiterte SQL-Abfrage mit Summierung der Mengen:
+        String sql = "SELECT DATE(w.warenausgangdate) AS tag, p.productname, SUM(wi.quantity) AS menge " +
                 "FROM warenausgaenge w " +
                 "JOIN warenausgang_items wi ON w.warenausgangid = wi.warenausgangid " +
                 "JOIN products p ON wi.productid = p.productid " +
@@ -365,14 +365,15 @@ public class PostgresDBWarenausgangManagement implements WarenausgangManager {
                 while (rs.next()) {
                     String tag = rs.getString("tag");
                     String produktName = rs.getString("productname");
-                    int anzahl = rs.getInt("anzahl");
-                    // Erstelle ein TagesStatistik-Objekt mit Datum, Anzahl und Produktname
-                    statistikListe.add(new TagesStatistik(tag, anzahl, produktName));
+                    int menge = rs.getInt("menge");
+                    // Verwende "menge" anstelle von "anzahl"
+                    statistikListe.add(new TagesStatistik(tag, menge, produktName));
                 }
             }
         }
         return statistikListe;
     }
+
 
     @Override
     public boolean deleteWarenausgang(int warenausgangId) throws Exception {

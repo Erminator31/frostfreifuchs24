@@ -260,21 +260,20 @@ public class PostgresDBWareneingangManagement implements WareneingangManager {
     @Override
     public List<TagesStatistik> getWareneingaengeProTag(Timestamp from, Timestamp to) throws Exception {
         List<TagesStatistik> statistikListe = new ArrayList<>();
-        // Erweiterte SQL-Abfrage mit Produktinformation:
-        String sql = "SELECT DATE(wg.wareneingangdate) AS tag, p.productname, COUNT(*) AS anzahl " +
+        String sql = "SELECT DATE(wg.warenausgangdate) AS tag, p.productname, SUM(wi.quantity) AS menge " +
                 "FROM wareneingaenge wg " +
                 "JOIN wareneingang_items wi ON wg.wareneingangid = wi.wareneingangid " +
                 "JOIN products p ON wi.productid = p.productid " +
                 "WHERE 1=1";
 
         if (from != null) {
-            sql += " AND wg.wareneingangdate >= ?";
+            sql += " AND wg.warenausgangdate >= ?";
         }
         if (to != null) {
-            sql += " AND wg.wareneingangdate <= ?";
+            sql += " AND wg.warenausgangdate <= ?";
         }
-        sql += " GROUP BY DATE(wg.wareneingangdate), p.productname " +
-                "ORDER BY DATE(wg.wareneingangdate), p.productname";
+        sql += " GROUP BY DATE(wg.warenausgangdate), p.productname " +
+                "ORDER BY DATE(wg.warenausgangdate), p.productname";
 
         try (Connection connection = basicDataSource.getConnection();
              PreparedStatement stmt = connection.prepareStatement(sql)) {
@@ -291,12 +290,13 @@ public class PostgresDBWareneingangManagement implements WareneingangManager {
                 while (rs.next()) {
                     String tag = rs.getString("tag");
                     String produktName = rs.getString("productname");
-                    int anzahl = rs.getInt("anzahl");
-                    statistikListe.add(new TagesStatistik(tag, anzahl, produktName));
+                    int menge = rs.getInt("menge");
+                    statistikListe.add(new TagesStatistik(tag, menge, produktName));
                 }
             }
         }
         return statistikListe;
     }
+
 
 }
