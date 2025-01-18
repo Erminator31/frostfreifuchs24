@@ -718,8 +718,8 @@
 
                             // Multiplikative Anwendung von alpha, beta, gamma
                             double forecastForDay = (alpha * historicalAvg)
-                                    * (beta * weatherFactor
-                                    + gamma * (1.0 + seasonFactor));
+                                    * ((beta * weatherFactor
+                                    * gamma * (1.0 + seasonFactor))/2);
                             dailyForecastValues.add(forecastForDay);
                         }
 
