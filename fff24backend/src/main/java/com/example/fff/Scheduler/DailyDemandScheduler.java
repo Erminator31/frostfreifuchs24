@@ -27,7 +27,7 @@ public class DailyDemandScheduler {
     /**
      * Tägliche Aufgabe zur Aktualisierung des dailyDemand um 1:00 Uhr morgens.
      */
-    @Scheduled(cron = "0 0 0 * * ?") // täglich um Mitternacht
+    @Scheduled(cron = "0 0 23 * * ?") // täglich um Mitternacht
     public void runForecastDaily() throws SQLException {
         LOGGER.log(Level.INFO, "Scheduled Task: runForecastDaily() aufgerufen.");
 
@@ -35,14 +35,8 @@ public class DailyDemandScheduler {
         double alpha = currentWeights.getAlpha();
         double beta  = currentWeights.getBeta();
         double gamma = currentWeights.getGamma();
-        // Wir simulieren einfach den GET-Call auf /forecast mit 14 Tagen.
         try {
-            // Da wir hier keinen direkten HTTP-Call machen wollen, rufen wir
-            // am besten direkt eine interne Methode in MappingController auf
-            // (z.B. extrahiere Logik in Service-Klasse) oder wir machen
-            // tatsächlich einen HTTP-Call, je nach Architektur.
 
-            // Minimale Demo, Pseudocode:
             MappingController controller = new MappingController();
             controller.getForecast(14,alpha,beta,gamma);
         } catch (Exception e) {
