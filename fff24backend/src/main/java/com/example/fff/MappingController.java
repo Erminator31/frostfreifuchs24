@@ -389,16 +389,16 @@
                 double p1, p2, p3; // Seasonal probabilities
                 if (m == 12 || m == 1 || m == 2) {
                     // Winter
-                    p1 = 0.4; p2 = 0.2; p3 = 0.4;
+                    p1 = 0.5; p2 = 0.05; p3 = 0.45;
                 } else if (m >= 3 && m <= 5) {
                     // Spring
-                    p1 = 0.3; p2 = 0.5; p3 = 0.2;
+                    p1 = 0.3; p2 = 0.5; p3 = 0.1;
                 } else if (m >= 6 && m <= 8) {
                     // Summer
-                    p1 = 0.1; p2 = 0.7; p3 = 0.2;
+                    p1 = 0.1; p2 = 0.85; p3 = 0.05;
                 } else {
                     // Autumn (9,10,11)
-                    p1 = 0.3; p2 = 0.3; p3 = 0.4;
+                    p1 = 0.5; p2 = 0.3; p3 = 0.2;
                 }
 
                 int lengthOfMonth = current.lengthOfMonth();
@@ -476,10 +476,28 @@
                 productId = 3;
             }
 
-            // Menge zwischen 5 und 100
-            int quantity = 5 + ThreadLocalRandom.current().nextInt(0, 100);
+            // Zugriff auf den ProductManager und Abrufen des Produkts
+            ProductManager productManager = PostgresDBProductManagement.getPostgresDBProductManagement();
+            int dailyDemand = 50;  // Standardwert, falls Produkt nicht gefunden wird
+            try {
+                Product product = productManager.readProductById(productId);
+                if (product != null) {
+                    dailyDemand = product.getDailyDemand();
+                }
+            } catch (SQLException e) {
+                // Fehlerbehandlung: Loggen und Standardwert verwenden
+                Logger.getLogger(getClass().getName()).log(Level.SEVERE, "Fehler beim Abrufen des Produkts mit ID " + productId, e);
+            }
+
+            // Berechnung der Menge basierend auf dailyDemand ±15%
+            double variationFactor = 1 + ThreadLocalRandom.current().nextDouble(-0.15, 0.15);
+            int quantity = (int) Math.round(dailyDemand * variationFactor);
+            // Sicherstellen, dass die Menge mindestens 1 beträgt
+            quantity = Math.max(quantity, 1);
+
             return new WarenausgangItem(productId, quantity);
         }
+
 
         private void ensureProductsExist() throws Exception {
             // Prüfen, ob Produkte 1, 2, 3 existieren, sonst anlegen
