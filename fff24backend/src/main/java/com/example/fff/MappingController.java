@@ -18,6 +18,8 @@
     import java.sql.SQLException;
     import java.sql.Timestamp;
     import java.time.LocalDate;
+    import java.time.DayOfWeek;
+    import java.time.MonthDay;
     import java.time.LocalDateTime;
     import java.time.format.DateTimeFormatter;
     import java.util.*;
@@ -627,7 +629,7 @@
                 double beta  = currentWeights.getBeta();
                 double gamma = currentWeights.getGamma();
 
-                // 2) Falls im Request neue Werte übergeben wurden, DB updaten
+                // 2) Falls im Request neue Werte übergeben wurden -> DB updaten
                 boolean changed = false;
                 if (alphaParam != null && !alphaParam.equals(alpha)) {
                     alpha = alphaParam;
@@ -648,135 +650,169 @@
                 }
 
                 // 3) Wetterdaten abrufen
-                String apiUrl = "https://api.open-meteo.com/v1/forecast?"
-                        + "latitude=49.68&longitude=9.18"
-                        + "&daily=temperature_2m_max,temperature_2m_min"
-                        + "&timezone=Europe/Berlin"
-                        + "&forecast_days=" + forecastDays;
+                String apiUrl = "https://api.open-meteo.com/v1/forecast"
+                        + "?latitude=49.3536"
+                        + "&longitude=9.1511"
+                        + "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max"
+                        + "&forecast_days=" + forecastDays; // default=14
 
                 String weatherJson = fetchWeatherData(apiUrl);
 
                 // 4) JSON parsen
                 org.json.JSONObject json = new org.json.JSONObject(weatherJson);
                 org.json.JSONObject daily = json.getJSONObject("daily");
-                org.json.JSONArray timeArray = daily.getJSONArray("time");
-                org.json.JSONArray tempMaxArray = daily.getJSONArray("temperature_2m_max");
-                org.json.JSONArray tempMinArray = daily.getJSONArray("temperature_2m_min");
+
+                org.json.JSONArray timeArray      = daily.getJSONArray("time");
+                org.json.JSONArray tempMaxArray   = daily.getJSONArray("temperature_2m_max");
+                org.json.JSONArray tempMinArray   = daily.getJSONArray("temperature_2m_min");
+                // NEU: Regenwahrscheinlichkeit
+                org.json.JSONArray precProbArray  = daily.getJSONArray("precipitation_probability_max");
 
                 // 5) Tagesdaten sammeln
-                List<DailyTemperature> dailyTemperatures = new ArrayList<>();
-                // Wir bauen uns auch gleich eine List<String> fuer das Frontend-Datum
                 List<String> dateList = new ArrayList<>();
-
-                // Optional: Formatter, um "2025-01-12" in "12.01.2025" zu konvertieren
                 DateTimeFormatter inputFmt  = DateTimeFormatter.ofPattern("yyyy-MM-dd");
                 DateTimeFormatter outputFmt = DateTimeFormatter.ofPattern("dd. MM. yyyy");
 
-                for (int i = 0; i < timeArray.length(); i++) {
-                    String dateString = timeArray.getString(i);
-                    double tmax = tempMaxArray.optDouble(i, 0.0);
-                    double tmin = tempMinArray.optDouble(i, 0.0);
-                    double avgTemp = (tmax + tmin) / 2.0;
-
-                    dailyTemperatures.add(new DailyTemperature(dateString, avgTemp));
-
-                    // Konvertieren in ein schöneres Datumsformat
-                    // (z.B. "12.01.2025")
-                    LocalDate parsed = LocalDate.parse(dateString, inputFmt);
-                    String formattedDate = parsed.format(outputFmt);
-                    dateList.add(formattedDate);
-                }
-
-                // 6) Forecast pro Produkt berechnen
+                // Vorbereiten: Alle Produkte laden
                 List<Product> allProducts = productManager.readProducts(null, null);
 
-                // Hier speichern wir am Ende: data[productName] -> ArrayList<Double> (Forecast-Werte)
+                // Wir bauen eine Struktur:
+                // dataMap[ProduktName] -> Forecast-Liste für forecastDays
                 Map<String, List<Double>> dataMap = new LinkedHashMap<>();
+                for (Product p : allProducts) {
+                    dataMap.put(p.getProductName(), new ArrayList<>());
+                }
 
-                try (Connection conn = PostgresDBWarenausgangManagement.getInstance()
-                        .getDataSource()
-                        .getConnection())
+                // Connection für DB-Operationen (z.B. Reorder-Berechnung)
+                try (Connection conn = PostgresDBWarenausgangManagement.getInstance().getDataSource().getConnection())
                 {
+                    // Loop über alle Tage
+                    for (int i = 0; i < timeArray.length(); i++) {
+
+                        // Tag, Temp
+                        String dateString = timeArray.getString(i);
+                        double tmax  = tempMaxArray.optDouble(i, 0.0);
+                        double tmin  = tempMinArray.optDouble(i, 0.0);
+                        double avgTemp = (tmax + tmin) / 2.0;
+
+                        // NEU: Regenwahrscheinlichkeit
+                        double precipProb = precProbArray.optDouble(i, 0.0);
+
+                        // Hübsches Datumsformat fürs Frontend
+                        LocalDate parsedDate = LocalDate.parse(dateString, inputFmt);
+                        String formattedDate = parsedDate.format(outputFmt);
+                        // Falls in dateList noch nicht enthalten, hinzufügen
+                        if (dateList.size() < timeArray.length()) {
+                            dateList.add(formattedDate);
+                        }
+
+                        // ---------------------------------------------
+                        // Schritt 1: Top-2-Produkte bzgl. weatherFactor ermitteln
+                        // ---------------------------------------------
+                        // Wir speichern (product, weatherFactor) in einer Liste:
+                        List<ProductWFactor> wFactors = new ArrayList<>();
+                        for (Product product : allProducts) {
+                            double wf = getWeatherFactor(product.getProductId(), avgTemp);
+                            wFactors.add(new ProductWFactor(product, wf));
+                        }
+                        // Sortieren nach wf absteigend
+                        wFactors.sort((a, b) -> Double.compare(b.weatherFactor(), a.weatherFactor()));
+
+                        // Falls precipProb > 50 => top2 bekommen +5%
+                        // (Speichern wir in einer Set-Struktur)
+                        Set<Integer> top2ProductIds = new HashSet<>();
+                        if (precipProb > 50.0 && wFactors.size() >= 2) {
+                            top2ProductIds.add(wFactors.get(0).product().getProductId());
+                            top2ProductIds.add(wFactors.get(1).product().getProductId());
+                        }
+                        // (Falls nur 1 Produkt existiert, dann eben nur das eine.)
+
+                        // ---------------------------------------------
+                        // Schritt 2: Forecast-Berechnung je Produkt
+                        // ---------------------------------------------
+                        for (Product product : allProducts) {
+
+                            // 2a) Historischen 7-Tage-Durchschnitt laden
+                            double historicalAvg = warenausgangManager.calculateAverageDailyDemand(product.getProductId(), conn);
+                            if (historicalAvg <= 0) {
+                                historicalAvg = 5.0; // Minimaler Fallback
+                            }
+
+                            // 2b) Wetterfaktor + Saisonfaktor
+                            double weatherFactor = getWeatherFactor(product.getProductId(), avgTemp);
+                            double seasonFactor  = getSeasonFactor(product.getProductId(), dateString);
+
+                            // 2c) Grund-Forecast
+                            double base = (alpha * historicalAvg)
+                                    * ((beta * weatherFactor * (gamma * (1.0 + seasonFactor))) / 2);
+
+                            // 2d) Falls dieses Produkt in den Top-2 und Regen > 50%, +5%
+                            if (top2ProductIds.contains(product.getProductId())) {
+                                base = base * 1.05; // +5%
+                            }
+
+                            // 2e) Feiertag/Weekend-Reduktion?
+                            if (isGermanHolidayOrWeekend(parsedDate)) {
+                                double randomReduction = 0.10 + (Math.random() * 0.05); // 10-15%
+                                base = base * (1.0 - randomReduction);
+                            }
+
+                            // 2f) Finaler Wert
+                            double forecastForDay = base;
+
+                            // In dataMap die Liste herausholen und append
+                            dataMap.get(product.getProductName()).add(forecastForDay);
+                        }
+                    }
+
+                    // ---------------------------------------------
+                    // Schritt 3: DB-Updates (dailyDemand etc.)
+                    //            + Auto-Wareneingang, reorder usw.
+                    // ---------------------------------------------
+                    // Für jedes Produkt => Summiere next 7 Tage
                     for (Product product : allProducts) {
-                        // Einfache Lesbarkeit:
-                        int pid = product.getProductId();
-                        String pName = product.getProductName();
+                        List<Double> fcValues = dataMap.get(product.getProductName());
+                        if (fcValues.isEmpty()) continue;
 
-                        // Historischer 7-Tage-Durchschnitt
-                        double historicalAvg = warenausgangManager.calculateAverageDailyDemand(pid, conn);
-                        LOGGER.log(Level.INFO, "historicalavg= " + historicalAvg + "product: " + product.getProductName());
-
-                        if (historicalAvg <= 0) {
-                            historicalAvg = 5.0;
-                        }
-
-                        List<Double> dailyForecastValues = new ArrayList<>();
-                        for (DailyTemperature dt : dailyTemperatures) {
-                            double temp = dt.avgTemp();
-                            double weatherFactor = getWeatherFactor(pid, temp);
-                            double seasonFactor = getSeasonFactor(pid, dt.dateString());
-
-                            // Multiplikative Anwendung von alpha, beta, gamma
-                            double forecastForDay = (alpha * historicalAvg)
-                                    * ((beta * weatherFactor
-                                    * gamma * (1.0 + seasonFactor))/2);
-                            dailyForecastValues.add(forecastForDay);
-                        }
-
-                        // Legen wir in dataMap ab: Key=ProduktName, Value=List<Double> Forecast
-                        dataMap.put(pName, dailyForecastValues);
-
-                        // -----------------------------------------
-                        // Reorder- und Wareneingangslogik:
-                        // -----------------------------------------
-                        // Nächste 7 Tage summieren
+                        // next 7 Tage
                         double sum7 = 0.0;
-                        int limit7 = Math.min(7, dailyForecastValues.size());
+                        int limit7 = Math.min(7, fcValues.size());
                         for (int i = 0; i < limit7; i++) {
-                            sum7 += dailyForecastValues.get(i);
+                            sum7 += fcValues.get(i);
                         }
                         int newDailyDemand = (int)Math.round(sum7 / limit7);
 
-                        // Nächste 3 Tage summieren
+                        // next 3 Tage
                         double sum3 = 0.0;
-                        int limit3 = Math.min(3, dailyForecastValues.size());
+                        int limit3 = Math.min(3, fcValues.size());
                         for (int i = 0; i < limit3; i++) {
-                            sum3 += dailyForecastValues.get(i);
+                            sum3 += fcValues.get(i);
                         }
                         int newReorderPoint = (int)Math.round(sum3);
+                        int reorderQty      = (int)Math.round(sum7); // Bsp: 7-Tage-Summe
 
-                        // reorder_quantity = Summe der nächsten 7 Tage
-                        int reorderQty = (int)Math.round(sum7);
+                        productManager.updateProductForecastValues(product,
+                                newDailyDemand,
+                                newReorderPoint,
+                                reorderQty);
 
-                        // DB-Update
-                        productManager.updateProductForecastValues(product, newDailyDemand, newReorderPoint, reorderQty);
-
-                        // Falls quantity < reorderPoint, automatischer Wareneingang
-                        Product updatedP = productManager.readProductById(pid);
+                        // Falls quantity < reorderPoint => Auto Wareneingang
+                        Product updatedP = productManager.readProductById(product.getProductId());
                         if (updatedP != null && updatedP.getProductQuantity() < updatedP.getReorderPoint()) {
-                            WareneingangItem item = new WareneingangItem(pid, updatedP.getReorderQuantity());
-                            wareneingangManager.createWareneingang(Collections.singletonList(item));
+                            WareneingangItem item = new WareneingangItem(
+                                    updatedP.getProductId(),
+                                    updatedP.getReorderQuantity()
+                            );
+                            wareneingangManager.createWareneingang(List.of(item));
                             LOGGER.log(Level.INFO,
-                                    "Automatische Nachbestellung für ProductID=" + pid
+                                    "Automatische Nachbestellung für ProductID=" + updatedP.getProductId()
                                             + " mit Menge=" + updatedP.getReorderQuantity());
                         }
                     }
                 }
 
-                // 7) Antwort-Objekt bauen:
-                // Wir wollen:
-                // {
-                //   alphaUsed: x,
-                //   betaUsed: y,
-                //   gammaUsed: z,
-                //   dates: [ ... ],
-                //   data: {
-                //       "Klaus Winter": [... Forecast-Werte ...],
-                //       "Klaus Summer": [...],
-                //       ...
-                //   }
-                // }
-
+                // 7) Antwort-Objekt aufbauen
+                // { alphaUsed, betaUsed, gammaUsed, dates, data: { 'Produkt1': [...], 'Produkt2': [...], ...} }
                 Map<String, Object> result = new HashMap<>();
                 result.put("alphaUsed", alpha);
                 result.put("betaUsed", beta);
@@ -792,6 +828,10 @@
                         .body("Fehler bei /forecast: " + e.getMessage());
             }
         }
+
+        // Hilfsrecord für Product + weatherFactor
+        private record ProductWFactor(Product product, double weatherFactor) {}
+
 
 
         private String fetchWeatherData(String url) throws Exception {
@@ -810,6 +850,7 @@
                 throw new RuntimeException("Fehler beim Abruf der Wetter-API. Status=" + response.statusCode());
             }
         }
+
 
         private record DailyTemperature(String dateString, double avgTemp) {}
 
@@ -880,6 +921,35 @@
                 return seasonFactorProduct1(6);
             }
         }
+
+
+        private static final Set<MonthDay> GERMAN_HOLIDAYS = Set.of(
+                MonthDay.of(1, 1),   // Neujahr
+                MonthDay.of(1, 6),   // Heilige Drei Könige
+                MonthDay.of(5, 1),   // Tag der Arbeit
+                MonthDay.of(8, 15),  // Mariä Himmelfahrt
+                MonthDay.of(10, 3),  // Tag der Deutschen Einheit
+                MonthDay.of(10, 31), // Reformationstag
+                MonthDay.of(11, 1),  // Allerheiligen
+                MonthDay.of(12, 25), // 1. Weihnachtstag
+                MonthDay.of(12, 26)  // 2. Weihnachtstag
+        );
+
+
+        private boolean isGermanHolidayOrWeekend(LocalDate date) {
+            // Prüfen, ob das Datum in der Feiertagsliste steht:
+            if (GERMAN_HOLIDAYS.contains(MonthDay.from(date))) {
+                return true;
+            }
+            // Prüfen, ob Samstag (6) oder Sonntag (7)
+            DayOfWeek dayOfWeek = date.getDayOfWeek();
+            if (dayOfWeek == DayOfWeek.SATURDAY || dayOfWeek == DayOfWeek.SUNDAY) {
+                return true;
+            }
+            return false;
+        }
+
+
 
         @GetMapping("/create-forecast-weights-table")
         public ResponseEntity<String> createForecastWeightsTable() {
