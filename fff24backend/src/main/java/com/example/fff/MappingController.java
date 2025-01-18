@@ -1049,7 +1049,7 @@
             }
         }
 
-        @PatchMapping("/product/update/{id}")
+        @PatchMapping("/products/update/{id}")
         public ResponseEntity<?> patchProduct(
                 @PathVariable("id") int productId,
                 @RequestBody Map<String, Object> updates) {
@@ -1075,6 +1075,24 @@
             }
         }
 
+        @DeleteMapping("/warenausgang/delete/{id}")
+        public ResponseEntity<?> deleteWarenausgang(@PathVariable("id") int warenausgangId) {
+            Logger.getLogger("MappingController").log(Level.INFO, "Deleting warenausgang with ID " + warenausgangId);
+            try {
+                boolean deleted = warenausgangManager.deleteWarenausgang(warenausgangId);
+                if (deleted) {
+                    Map<String, String> response = new HashMap<>();
+                    response.put("message", "Warenausgang with ID " + warenausgangId + " deleted successfully.");
+                    return ResponseEntity.ok(response);
+                } else {
+                    return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Warenausgang not found");
+                }
+            } catch (Exception e) {
+                Logger.getLogger("MappingController").log(Level.SEVERE, "Error deleting warenausgang: " + e.getMessage(), e);
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body("Error deleting warenausgang: " + e.getMessage());
+            }
+        }
 
 
     }

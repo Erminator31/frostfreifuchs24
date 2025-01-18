@@ -374,6 +374,18 @@ public class PostgresDBWarenausgangManagement implements WarenausgangManager {
         return statistikListe;
     }
 
+    @Override
+    public boolean deleteWarenausgang(int warenausgangId) throws Exception {
+        String sql = "DELETE FROM warenausgaenge WHERE warenausgangid = ?";
+        try (Connection connection = basicDataSource.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setInt(1, warenausgangId);
+            int affectedRows = stmt.executeUpdate();
+            return affectedRows > 0;
+        } catch (SQLException e) {
+            throw new Exception("Error deleting warenausgang: " + e.getMessage(), e);
+        }
+    }
 
 
 }

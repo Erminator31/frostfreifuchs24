@@ -53,7 +53,7 @@ Content-Type: application/json
 }
 
 ### Produkte abrufen (GET /products)
-GET https://backend-frostfreifuchs-b240fdbecd00.herokuapp.com/api/products?productName=ProduktA&productType=TypX
+GET https://backend-frostfreifuchs-b240fdbecd00.herokuapp.com/api/products
 Content-Type: application/json
 
 ### Produkt löschen (DELETE /product/delete/{id})
@@ -112,11 +112,14 @@ Content-Type: application/json
 ### Warenausgänge pro Tag abrufen (GET /warenausgaenge/pro-tag)
 GET https://backend-frostfreifuchs-b240fdbecd00.herokuapp.com/api/warenausgaenge/pro-tag?from=2025-01-01&to=2025-01-31
 Content-Type: application/json
-### Produktdaten aktualisieren (PATCH /product/update/{id})
-PATCH https://backend-frostfreifuchs-b240fdbecd00.herokuapp.com/api/product/update/1
+### Produktdaten aktualisieren (PATCH /products/update/{id})
+PATCH https://backend-frostfreifuchs-b240fdbecd00.herokuapp.com/api/products/update/1
 Content-Type: application/json
 
 {
   "dailyDemand": 600,
   "productQuantity": 1500
 }
+### Warenausgang löschen (DELETE /warenausgang/delete/{id})
+DELETE https://backend-frostfreifuchs-b240fdbecd00.herokuapp.com/api/warenausgang/delete/
+

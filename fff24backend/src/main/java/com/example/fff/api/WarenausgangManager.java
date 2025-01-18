@@ -24,4 +24,6 @@ public interface WarenausgangManager {
     List<Warenausgang> getWarenausgaenge(Timestamp from, Timestamp to) throws Exception;
 
     List<TagesStatistik> getWarenausgaengeProTag(Timestamp from, Timestamp to) throws Exception;
+
+    boolean deleteWarenausgang(int warenausgangId) throws Exception;
 }
