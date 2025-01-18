@@ -260,20 +260,20 @@ public class PostgresDBWareneingangManagement implements WareneingangManager {
     @Override
     public List<TagesStatistik> getWareneingaengeProTag(Timestamp from, Timestamp to) throws Exception {
         List<TagesStatistik> statistikListe = new ArrayList<>();
-        String sql = "SELECT DATE(wg.warenausgangdate) AS tag, p.productname, SUM(wi.quantity) AS menge " +
+        String sql = "SELECT DATE(wg.wareneingangdate) AS tag, p.productname, SUM(wi.quantity) AS menge " +
                 "FROM wareneingaenge wg " +
                 "JOIN wareneingang_items wi ON wg.wareneingangid = wi.wareneingangid " +
                 "JOIN products p ON wi.productid = p.productid " +
                 "WHERE 1=1";
 
         if (from != null) {
-            sql += " AND wg.warenausgangdate >= ?";
+            sql += " AND wg.wareneingangdate >= ?";
         }
         if (to != null) {
-            sql += " AND wg.warenausgangdate <= ?";
+            sql += " AND wg.wareneingangdate <= ?";
         }
-        sql += " GROUP BY DATE(wg.warenausgangdate), p.productname " +
-                "ORDER BY DATE(wg.warenausgangdate), p.productname";
+        sql += " GROUP BY DATE(wg.wareneingangdate), p.productname " +
+                "ORDER BY DATE(wg.wareneingangdate), p.productname";
 
         try (Connection connection = basicDataSource.getConnection();
              PreparedStatement stmt = connection.prepareStatement(sql)) {
