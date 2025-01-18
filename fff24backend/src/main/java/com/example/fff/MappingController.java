@@ -744,7 +744,7 @@
 
                             // 2c) Grund-Forecast
                             double base = (alpha * historicalAvg)
-                                    * ((beta * weatherFactor * (gamma * (1.0 + seasonFactor))) / 2);
+                                    * ((beta * weatherFactor * (gamma * (1.0 + seasonFactor))));
 
                             // 2d) Falls dieses Produkt in den Top-2 und Regen > 50%, +5%
                             if (top2ProductIds.contains(product.getProductId())) {
