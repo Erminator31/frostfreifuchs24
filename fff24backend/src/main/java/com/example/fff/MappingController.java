@@ -891,13 +891,13 @@
 
         private double seasonFactorProduct1(int x) {
             // g(x) = | - ( cos(π/6 * x) + 1.2 ) * 0.4 |
-            double val = (Math.cos(Math.PI / 6.0 * x) + 1.2) * 0.4;
+            double val = (5 * Math.cos((Math.PI / 6) * x) + 5) * 0.5;
             return Math.abs(val);
         }
 
         private double seasonFactorProduct2(int x) {
             // f(x) = | - ( cos(π/6 * x) - 1.2 ) * 0.4 |
-            double val = -(Math.cos(Math.PI / 6.0 * x) - 1.2) * 0.4;
+            double val = -(5 * Math.cos((Math.PI / 6) * x) - 5) * 0.5;
             return Math.abs(val);
         }
 
