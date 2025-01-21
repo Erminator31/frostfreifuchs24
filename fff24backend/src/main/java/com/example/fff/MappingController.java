@@ -787,17 +787,6 @@
                                 newReorderPoint,
                                 reorderQty);
 
-                        // Falls quantity < reorderPoint => Auto Wareneingang
-                        Product updatedP = productManager.readProductById(product.getProductId());
-                        if (updatedP != null && updatedP.getProductQuantity() < updatedP.getReorderPoint()) {
-                            WareneingangItem item = new WareneingangItem(
-                                    updatedP.getProductId(),
-                                    updatedP.getReorderQuantity()
-                            );
-                            wareneingangManager.createWareneingang(List.of(item));
-                            LOGGER.log(Level.INFO,
-                                    "Automatische Nachbestellung für ProductID=" + updatedP.getProductId()
-                                            + " mit Menge=" + updatedP.getReorderQuantity());
                         }
                     }
                 }
