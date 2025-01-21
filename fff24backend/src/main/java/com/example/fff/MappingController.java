@@ -333,37 +333,37 @@
         }
 
 
+        /**
+         * Neue Version, die einen frei wählbaren Datumsbereich entgegennimmt.
+         * Optional kannst du mit `countPerDay` die Anzahl Warenausgänge pro Tag steuern.
+         */
         @GetMapping("/generate-history")
         public ResponseEntity<String> generateHistoricalData(
-                @RequestParam(name = "year", required = false) Integer year,
-                @RequestParam(name = "month", required = false) Integer month) {
+                @RequestParam("startDate") String startDateStr,
+                @RequestParam("endDate") String endDateStr,
+                @RequestParam(name = "countPerDay", defaultValue = "30") int countPerDay
+        ) {
             try {
-                LOGGER.log(Level.INFO, "Creating historical warenausgang data in chunks.");
+                LOGGER.log(Level.INFO, "Creating historical warenausgang data for range {0} - {1}",
+                        new Object[]{startDateStr, endDateStr});
 
-                // Make sure we have at least 3 products available:
+                // 1) Ensure we have at least 3 products
                 ensureProductsExist();
 
-                // If the caller didn't provide year or month, or provided invalid values, pick smaller defaults.
-                if (year == null || year < 2020) {
-                    year = 2024;
+                // 2) Parse Start- und Enddatum
+                LocalDate startDate = LocalDate.parse(startDateStr);
+                LocalDate endDate = LocalDate.parse(endDateStr);
+
+                if (startDate.isAfter(endDate)) {
+                    return ResponseEntity.badRequest().body("Error: startDate must not be after endDate.");
                 }
-                if (month == null || month < 1 || month > 12) {
-                    month = 1;
-                }
 
-                // We'll just generate one month’s worth of data at a time.
-                LocalDate startOfMonth = LocalDate.of(year, month, 1);
-                LocalDate endOfMonth = startOfMonth.withDayOfMonth(startOfMonth.lengthOfMonth());
-
-                // You can tweak how many Warenausgänge to generate per month
-                int ausgaengeProMonat = 30;
-
-                // Process the chunk
-                generateWarenausgaengeForDateRange(startOfMonth, endOfMonth, ausgaengeProMonat);
+                // 3) Generiere Warenausgänge pro Tag
+                generateWarenausgaengeForDateRange(startDate, endDate, countPerDay);
 
                 String successMsg = String.format(
-                        "Historical data generated successfully for %d-%02d (Warenausgänge: %d).",
-                        year, month, ausgaengeProMonat
+                        "Historical data generated successfully from %s to %s (Warenausgänge pro Tag: %d).",
+                        startDateStr, endDateStr, countPerDay
                 );
                 return ResponseEntity.ok(successMsg);
 
@@ -374,18 +374,22 @@
             }
         }
 
+        /**
+         * Passt die Schleife an, damit sie täglich in [startDate..endDate] iteriert
+         * und für jeden Tag `countPerDay` Warenausgänge erzeugt.
+         */
         private void generateWarenausgaengeForDateRange(
                 LocalDate startDate,
                 LocalDate endDate,
-                int ausgaengeProMonat
+                int countPerDay
         ) throws Exception {
 
-            // Move "current" to the start of the given month (or date range)
-            LocalDate current = startDate;
-
-            while (!current.isAfter(endDate)) {
+            // Schleife geht tagweise durch den Bereich
+            for (LocalDate current = startDate; !current.isAfter(endDate); current = current.plusDays(1)) {
                 int m = current.getMonthValue();
-                double p1, p2, p3; // Seasonal probabilities
+
+                // saisonale Wahrscheinlichkeiten
+                double p1, p2, p3;
                 if (m == 12 || m == 1 || m == 2) {
                     // Winter
                     p1 = 0.5; p2 = 0.05; p3 = 0.45;
@@ -402,18 +406,19 @@
 
                 int lengthOfMonth = current.lengthOfMonth();
 
-                // Generate X Warenausgänge for this month
-                for (int i = 0; i < ausgaengeProMonat; i++) {
-                    // Each Warenausgang has 2 randomly chosen product items
+                // Generiere countPerDay Warenausgänge für "current"
+                for (int i = 0; i < countPerDay; i++) {
+
+                    // Beispiel: Jeder Warenausgang hat 2 zufällige Produkte
                     List<WarenausgangItem> items = new ArrayList<>();
                     items.add(generateWarenausgangItemWithSeason(p1, p2, p3));
                     items.add(generateWarenausgangItemWithSeason(p1, p2, p3));
 
-                    // Pick a random day in [1..lengthOfMonth]
+                    // Wähle zufälligen Tag innerhalb desselben Monats (oder du nimmst "current" direkt)
                     int randomDay = ThreadLocalRandom.current().nextInt(1, lengthOfMonth + 1);
                     LocalDate randomDate = current.withDayOfMonth(randomDay);
 
-                    // Random hour [8..17], random minute [0..59]
+                    // Zufällige Uhrzeit zwischen 8..17 Uhr
                     int randomHour = ThreadLocalRandom.current().nextInt(8, 18);
                     int randomMinute = ThreadLocalRandom.current().nextInt(0, 60);
 
@@ -426,11 +431,11 @@
                     );
                     Timestamp warenausgangTimestamp = Timestamp.valueOf(warenausgangDateTime);
 
-                    // Create the Warenausgang
+                    // Erstelle Warenausgang
                     Warenausgang createdWarenausgang = warenausgangManager
                             .createWarenausgang(items, warenausgangTimestamp);
 
-                    // Check if the product quantity is below reorderPoint. If so, create Wareneingang
+                    // Check Reorder-Point => ggf. Wareneingang
                     for (WarenausgangItem item : items) {
                         Product updatedProduct = getProductById(item.getProductId());
                         if (updatedProduct != null
@@ -440,7 +445,6 @@
                                     updatedProduct.getProductId(),
                                     updatedProduct.getReorderQuantity()
                             );
-                            // Create Wareneingang with the same timestamp to replenish
                             wareneingangManager.createWareneingang(
                                     Collections.singletonList(wareneingangItem),
                                     warenausgangTimestamp
@@ -448,11 +452,8 @@
                         }
                     }
                 }
-                // Move on to next month if you want multiple months in the same call
-                current = current.plusMonths(1);
             }
         }
-
 
         private Product getProductById(int productId) {
             try {
@@ -462,7 +463,6 @@
                 return null;
             }
         }
-
 
         private WarenausgangItem generateWarenausgangItemWithSeason(double p1, double p2, double p3) {
             double rnd = Math.random();
@@ -475,31 +475,26 @@
                 productId = 3;
             }
 
-            // Zugriff auf den ProductManager und Abrufen des Produkts
             ProductManager productManager = PostgresDBProductManagement.getPostgresDBProductManagement();
-            int dailyDemand = 50;  // Standardwert, falls Produkt nicht gefunden wird
+            int dailyDemand = 50;  // Fallback
             try {
                 Product product = productManager.readProductById(productId);
                 if (product != null) {
                     dailyDemand = product.getDailyDemand();
                 }
             } catch (SQLException e) {
-                // Fehlerbehandlung: Loggen und Standardwert verwenden
-                Logger.getLogger(getClass().getName()).log(Level.SEVERE, "Fehler beim Abrufen des Produkts mit ID " + productId, e);
+                Logger.getLogger(getClass().getName()).log(Level.SEVERE,
+                        "Fehler beim Abrufen des Produkts mit ID " + productId, e);
             }
 
-            // Berechnung der Menge basierend auf dailyDemand ±15%
             double variationFactor = 1 + ThreadLocalRandom.current().nextDouble(-0.15, 0.15);
             int quantity = (int) Math.round(dailyDemand * variationFactor);
-            // Sicherstellen, dass die Menge mindestens 1 beträgt
             quantity = Math.max(quantity, 1);
 
             return new WarenausgangItem(productId, quantity);
         }
 
-
         private void ensureProductsExist() throws Exception {
-            // Prüfen, ob Produkte 1, 2, 3 existieren, sonst anlegen
             List<Product> existing = productManager.readProducts(null, null);
             boolean has1 = existing.stream().anyMatch(p -> p.getProductId() == 1);
             boolean has2 = existing.stream().anyMatch(p -> p.getProductId() == 2);
@@ -515,7 +510,6 @@
                 productManager.addProduct("Klaus Xtreme", "Mit Frostschutz", 1000);
             }
         }
-
         @GetMapping("/update-daily-demand")
         public ResponseEntity<String> updateDailyDemand() {
             try {
@@ -1177,268 +1171,6 @@
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                         .body("Error deleting warenausgang: " + e.getMessage());
             }
-        }
-
-        @GetMapping("/generate-history-range")
-        public ResponseEntity<String> generateHistoricalDataLikeForecast(
-                @RequestParam(name = "startDate") String startDateStr,
-                @RequestParam(name = "endDate") String endDateStr,
-                @RequestParam(name = "count") int count
-        ) {
-            try {
-                LOGGER.log(Level.INFO, "Generating Warenausgänge using forecast-like logic. count = {0}", count);
-
-                // 1) Ensure products exist (1,2,3) or however many you want
-                ensureProductsExist();
-
-                // 2) Parse the incoming date range
-                LocalDate startDate = LocalDate.parse(startDateStr);
-                LocalDate endDate   = LocalDate.parse(endDateStr);
-                if (startDate.isAfter(endDate)) {
-                    return ResponseEntity.badRequest().body("Error: startDate cannot be after endDate.");
-                }
-
-                // 3) Fetch alpha, beta, gamma from DB (like /forecast does)
-                ForecastWeights fw = productManager.getForecastWeights();
-                double alpha = fw.getAlpha();
-                double beta  = fw.getBeta();
-                double gamma = fw.getGamma();
-
-                // 4) Fetch historical weather data from the "historical-forecast-api" for [startDate..endDate]
-                //    (We parse average temperature + precipitation_sum)
-                Map<LocalDate, DayWeather> weatherMap = fetchHistoricalWeatherData(startDate, endDate);
-
-                // 5) Actually create Warenausgänge
-                //    We will pick random days in [startDate..endDate], build WarenausgangItems using
-                //    the forecast-like logic, then save them.
-                generateWarenausgaengeLikeForecast(
-                        startDate,
-                        endDate,
-                        count,
-                        weatherMap,
-                        alpha,
-                        beta,
-                        gamma
-                );
-
-                String msg = String.format(
-                        "Successfully generated %d Warenausgänge between %s and %s with forecast-like logic (±15%%).",
-                        count, startDate, endDate
-                );
-                return ResponseEntity.ok(msg);
-
-            } catch (Exception e) {
-                LOGGER.log(Level.SEVERE, "Error in generate-history-range: {0}", e.getMessage());
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                        .body("Error generating history: " + e.getMessage());
-            }
-        }
-
-        /**
-         * Holds the daily weather data we care about, parsed from the historical API.
-         */
-        private record DayWeather(double avgTemp, double precipSum) {}
-
-        private Map<LocalDate, DayWeather> fetchHistoricalWeatherData(LocalDate startDate, LocalDate endDate) throws Exception {
-            // Example URL (adjust to your needs):
-            // https://historical-forecast-api.open-meteo.com/v1/forecast
-            //   ?latitude=49.3536
-            //   &longitude=9.1511
-            //   &start_date=2022-01-01
-            //   &end_date=2022-01-31
-            //   &daily=temperature_2m_max,temperature_2m_min,precipitation_sum
-            //   &timezone=Europe/Berlin
-            String baseUrl = "https://historical-forecast-api.open-meteo.com/v1/forecast";
-            String url = String.format(
-                    "%s?latitude=49.3536&longitude=9.1511&start_date=%s&end_date=%s"
-                            + "&daily=temperature_2m_max,temperature_2m_min,precipitation_sum"
-                            + "&timezone=Europe/Berlin",
-                    baseUrl,
-                    startDate,
-                    endDate
-            );
-
-            String response = fetchWeatherData(url); // Re-use your existing fetchWeatherData method
-            org.json.JSONObject json  = new org.json.JSONObject(response);
-            org.json.JSONObject daily = json.getJSONObject("daily");
-
-            org.json.JSONArray timeArr  = daily.getJSONArray("time");
-            org.json.JSONArray tmaxArr  = daily.getJSONArray("temperature_2m_max");
-            org.json.JSONArray tminArr  = daily.getJSONArray("temperature_2m_min");
-            org.json.JSONArray psumArr  = daily.getJSONArray("precipitation_sum");
-
-            Map<LocalDate, DayWeather> map = new HashMap<>();
-            for (int i = 0; i < timeArr.length(); i++) {
-                LocalDate d = LocalDate.parse(timeArr.getString(i)); // "2022-01-01"
-
-                double tmax = tmaxArr.optDouble(i, 0.0);
-                double tmin = tminArr.optDouble(i, 0.0);
-                double avg  = (tmax + tmin) / 2.0;
-
-                double precip = psumArr.optDouble(i, 0.0);
-
-                map.put(d, new DayWeather(avg, precip));
-            }
-            return map;
-        }
-
-        private void generateWarenausgaengeLikeForecast(
-                LocalDate startDate,
-                LocalDate endDate,
-                int count,
-                Map<LocalDate, DayWeather> weatherMap,
-                double alpha,
-                double beta,
-                double gamma
-        ) throws Exception {
-            // 1) Build a list of all days in [startDate..endDate] that have weather data
-            List<LocalDate> validDays = new ArrayList<>();
-            for (LocalDate d = startDate; !d.isAfter(endDate); d = d.plusDays(1)) {
-                if (weatherMap.containsKey(d)) {
-                    validDays.add(d);
-                }
-            }
-            if (validDays.isEmpty()) {
-                LOGGER.warning("No valid days with weather data in the given range!");
-                return;
-            }
-
-            // 2) Load all products from DB
-            List<Product> allProducts = productManager.readProducts(null, null);
-
-            // 3) Prepare a DB Connection for calculating historical 7-day average (optional)
-            try (Connection conn = warenausgangManager.getDataSource().getConnection()) {
-
-                // 4) Loop to create 'count' Warenausgänge
-                for (int i = 0; i < count; i++) {
-                    // Pick a random day from validDays
-                    LocalDate chosenDay = validDays.get(ThreadLocalRandom.current().nextInt(validDays.size()));
-                    DayWeather dw = weatherMap.get(chosenDay);
-
-                    // We interpret precipSum => pseudo "rain probability" for the top-2 logic
-                    // e.g. if precipSum > 5 => 60% chance, if > 10 => 90%, etc.
-                    double precipProb = convertPrecipSumToProbability(dw.precipSum);
-
-                    // Step 1: find the top-2 products by "weatherFactor"
-                    // (like your forecast logic)
-                    List<ProductWFactor> wFactors = new ArrayList<>();
-                    for (Product p : allProducts) {
-                        double wf = getWeatherFactor(p.getProductId(), dw.avgTemp);
-                        wFactors.add(new ProductWFactor(p, wf));
-                    }
-                    wFactors.sort((a, b) -> Double.compare(b.weatherFactor(), a.weatherFactor()));
-                    Set<Integer> top2Ids = new HashSet<>();
-                    if (precipProb > 50.0 && wFactors.size() >= 2) {
-                        top2Ids.add(wFactors.get(0).product().getProductId());
-                        top2Ids.add(wFactors.get(1).product().getProductId());
-                    }
-
-                    // Step 2: For each product => compute "score" = alpha * histAvg * beta*wf * gamma*(1+season)
-                    // plus any holiday/weekend reduction, plus top-2 +5%, THEN we do ±15%.
-                    List<ProductScore> scoring = new ArrayList<>();
-                    for (Product p : allProducts) {
-                        // 2a) historical 7-day average from DB
-                        double histAvg = warenausgangManager.calculateAverageDailyDemand(p.getProductId(), conn);
-                        if (histAvg <= 0) histAvg = 5.0; // fallback
-
-                        // 2b) weather + season factors
-                        double wFactor = getWeatherFactor(p.getProductId(), dw.avgTemp);
-                        double sFactor = getSeasonFactor(p.getProductId(), chosenDay.toString());
-
-                        // 2c) base = alpha * histAvg * (beta * wFactor * (gamma * (1.0 + sFactor)));
-                        double baseVal = alpha * histAvg * (beta * wFactor * (gamma * (1.0 + sFactor)));
-
-                        // 2d) if top-2 & precipProb>50 => +5%
-                        if (top2Ids.contains(p.getProductId())) {
-                            baseVal *= 1.05;
-                        }
-
-                        // 2e) if holiday/weekend => reduce 10-15%
-                        if (isGermanHolidayOrWeekend(chosenDay)) {
-                            double reduction = 0.10 + Math.random() * 0.05;
-                            baseVal *= (1.0 - reduction);
-                        }
-
-                        // We'll store this baseVal in a list for weighting
-                        scoring.add(new ProductScore(p, baseVal));
-                    }
-
-                    // Weighted pick of exactly one product
-                    Product chosenProduct = pickProductByScore(scoring);
-
-                    // Final ±15% variation in quantity
-                    // "baseVal" = the chosen product's final forecast
-                    double chosenScore = 0;
-                    for (ProductScore ps : scoring) {
-                        if (ps.product.getProductId() == chosenProduct.getProductId()) {
-                            chosenScore = ps.score;
-                            break;
-                        }
-                    }
-                    double variationFactor = 1.0 + ThreadLocalRandom.current().nextDouble(-0.15, 0.15);
-                    int quantity = (int)Math.round(chosenScore * variationFactor);
-                    if (quantity < 1) quantity = 1;
-
-                    // Create the Warenausgang
-                    WarenausgangItem item = new WarenausgangItem(chosenProduct.getProductId(), quantity);
-
-                    // Random hour/minute
-                    int hour   = ThreadLocalRandom.current().nextInt(8, 18);  // 8..17
-                    int minute = ThreadLocalRandom.current().nextInt(0, 60);
-                    LocalDateTime dt = LocalDateTime.of(chosenDay, LocalTime.of(hour, minute));
-                    Timestamp ts = Timestamp.valueOf(dt);
-
-                    // Insert into DB
-                    warenausgangManager.createWarenausgang(List.of(item), ts);
-                }
-            }
-        }
-
-        /** Helper record for storing (Product, weatherFactor). */
-        private record ProductFactor(Product product, double weatherFactor) {}
-
-        /** Helper for the final weighting logic. */
-        private static class ProductScore {
-            Product product;
-            double score;
-            ProductScore(Product p, double s) {
-                this.product = p;
-                this.score   = s;
-            }
-        }
-
-        /**
-         * Example: Convert precipitation sum (mm) into a "probability" for your top-2 logic.
-         * You can tweak thresholds as you like.
-         */
-        private double convertPrecipSumToProbability(double precipSum) {
-            // e.g. <1 mm => 0%, 1..5 => 30%, 5..10 => 60%, >10 => 90%
-            if (precipSum < 1.0)   return 0.0;
-            if (precipSum < 5.0)   return 30.0;
-            if (precipSum < 10.0)  return 60.0;
-            return 90.0;
-        }
-
-        /** Weighted random pick of a single Product from the list. */
-        private Product pickProductByScore(List<ProductScore> scoring) {
-            double sum = 0.0;
-            for (ProductScore ps : scoring) {
-                sum += ps.score;
-            }
-            if (sum <= 0.0) {
-                // fallback: pick the first product or ID=1
-                return scoring.get(0).product;
-            }
-            double r = Math.random() * sum;
-            double cumulative = 0.0;
-            for (ProductScore ps : scoring) {
-                cumulative += ps.score;
-                if (r <= cumulative) {
-                    return ps.product;
-                }
-            }
-            // fallback
-            return scoring.get(scoring.size() - 1).product;
         }
 
 
