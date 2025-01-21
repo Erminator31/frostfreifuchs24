@@ -869,7 +869,7 @@
             else {
                 return switch (productId) {
                     case 1 -> 0.1;
-                    case 2 -> 1.0;
+                    case 2 -> 1.5;
                     case 3 -> 0.05;
                     default -> 1.0;
                 };
