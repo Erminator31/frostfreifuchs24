@@ -734,8 +734,8 @@
                             double seasonFactor  = getSeasonFactor(product.getProductId(), dateString);
 
                             // 2c) Grund-Forecast
-                            double base = (alpha * historicalAvg)
-                                    * ((2*beta * weatherFactor + (gamma *  (1 + seasonFactor)))/2);
+                            double base = (alpha * historicalAvg)/
+                                    ((2*beta * weatherFactor + (gamma *  (1 + seasonFactor)))/2)*7;
                             LOGGER.log(Level.INFO, "Historical avg last 7 days" + historicalAvg + "Product: " + product.getProductName());
                             LOGGER.log(Level.INFO, "Weather factor: " + weatherFactor + "Season Factor:  " + seasonFactor);
                             // 2d) Falls dieses Produkt in den Top-2 und Regen > 50%, +5%
