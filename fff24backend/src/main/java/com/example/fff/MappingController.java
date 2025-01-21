@@ -782,14 +782,10 @@
                         int newReorderPoint = (int)Math.round(sum3);
                         int reorderQty      = (int)Math.round(sum7); // Bsp: 7-Tage-Summe
 
-                        productManager.updateProductForecastValues(product,
-                                newDailyDemand,
-                                newReorderPoint,
-                                reorderQty);
 
                         }
                     }
-                }
+
 
                 // 7) Antwort-Objekt aufbauen
                 // { alphaUsed, betaUsed, gammaUsed, dates, data: { 'Produkt1': [...], 'Produkt2': [...], ...} }
