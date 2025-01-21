@@ -734,7 +734,7 @@
                             double seasonFactor  = getSeasonFactor(product.getProductId(), dateString);
 
                             // 2c) Grund-Forecast
-                            double base = (alpha * historicalAvg) + (beta * weatherFactor) + (gamma *  (historicalAvg* seasonFactor));
+                            double base =((beta * weatherFactor) + (gamma * (1 + seasonFactor))) / 2;
                             LOGGER.log(Level.INFO, "Historical avg last 7 days" + historicalAvg + "Product: " + product.getProductName());
                             LOGGER.log(Level.INFO, "Weather factor: " + weatherFactor + "Season Factor:  " + seasonFactor);
                             // 2d) Falls dieses Produkt in den Top-2 und Regen > 50%, +5%
@@ -847,31 +847,31 @@
 
         private double getWeatherFactor(int productId, double temperature) {
             // Falls < -5 Grad
-            if (temperature < -5) {
-                return switch (productId) {
-                    case 1 -> 0.7;
-                    case 2 -> 0.2;
-                    case 3 -> 1.0;
-                    default -> 1.0; // Fallback
-                };
-            }
-            // Falls < 4 Grad
-            else if (temperature < 4) {
-                return switch (productId) {
-                    case 1 -> 1.0;
-                    case 2 -> 0.2;
-                    case 3 -> 0.5;
-                    default -> 1.0;
-                };
-            }
-            // Falls >= 4 Grad
-            else {
-                return switch (productId) {
-                    case 1 -> 0.1;
-                    case 2 -> 1.5;
-                    case 3 -> 0.05;
-                    default -> 1.0;
-                };
+                if (temperature < -5) {
+                    return switch (productId) {
+                        case 1 -> 0.7;
+                        case 2 -> 0.2;
+                        case 3 -> 1.0;
+                        default -> 1.0; // Fallback
+                    };
+                }
+                // Falls < 4 Grad
+                else if (temperature < 4) {
+                    return switch (productId) {
+                        case 1 -> 1.0;
+                        case 2 -> 0.2;
+                        case 3 -> 0.5;
+                        default -> 1.0;
+                    };
+                }
+                // Falls >= 4 Grad
+                else {
+                    return switch (productId) {
+                        case 1 -> 0.1;
+                        case 2 -> 1.5;
+                        case 3 -> 0.05;
+                        default -> 1.0;
+                    };
             }
         }
 
