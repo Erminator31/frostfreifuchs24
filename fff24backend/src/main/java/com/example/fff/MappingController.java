@@ -736,7 +736,8 @@
                             // 2c) Grund-Forecast
                             double base = (alpha * historicalAvg)
                                     * ((beta * weatherFactor * (gamma * (1.0 + seasonFactor))));
-
+                            LOGGER.log(Level.INFO, "Historical avg last 7 days" + historicalAvg + "Product: " + product.getProductName());
+                            LOGGER.log(Level.INFO, "Weather factor: " + weatherFactor + "Season Factor:  " + seasonFactor);
                             // 2d) Falls dieses Produkt in den Top-2 und Regen > 50%, +5%
                             if (top2ProductIds.contains(product.getProductId())) {
                                 base = base * 1.05; // +5%
