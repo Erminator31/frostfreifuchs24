@@ -8,6 +8,7 @@ import org.apache.commons.dbcp.BasicDataSource;
 import org.springframework.stereotype.Service;
 
 import java.sql.*;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
@@ -388,5 +389,63 @@ public class PostgresDBWarenausgangManagement implements WarenausgangManager {
         }
     }
 
+    @Override
+    public double calculateSameDayHistoricalAverage(
+            int productId,
+            LocalDate targetDate,
+            int years,
+            Connection connection
+    ) throws SQLException {
+        // Wir summieren die Warenausgänge für genau diesen Kalendertag
+        // in jedem der letzten `years` Jahre (z.B. 5).
+        // targetDate ist z.B. "2025-01-20"
+
+        double totalQuantity = 0.0;
+        int countDaysFound = 0;
+
+        String sql = """
+        SELECT COALESCE(SUM(oi.quantity), 0) AS total_qty
+        FROM warenausgaenge w
+        JOIN warenausgang_items oi ON w.warenausgangid = oi.warenausgangid
+        WHERE oi.productid = ?
+          AND w.warenausgangdate >= ?
+          AND w.warenausgangdate < ?
+    """;
+
+        for (int i = 1; i <= years; i++) {
+            // 1) Bestimme das exakte Datum z.B. 20.01.(2025 - i)
+            LocalDate dateInPast = targetDate.minusYears(i);
+
+            // 2) Beginn dieses Tages
+            Timestamp startOfDay = Timestamp.valueOf(dateInPast.atStartOfDay());
+            // 3) Beginn des Folgetages (Ausschlussgrenze)
+            Timestamp endOfDay = Timestamp.valueOf(dateInPast.plusDays(1).atStartOfDay());
+
+            // 4) Query ausführen
+            try (PreparedStatement ps = connection.prepareStatement(sql)) {
+                ps.setInt(1, productId);
+                ps.setTimestamp(2, startOfDay);
+                ps.setTimestamp(3, endOfDay);
+
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        double qty = rs.getDouble("total_qty");
+                        // Nur wenn tatsächlich ein Warenausgang > 0 stattfand,
+                        // könnte man wahlweise den Tag zählen.
+                        // Hier: Wir addieren die gefundene Menge.
+                        // Ggf. kann man bei qty=0 unterscheiden, ob man den Tag ignoriert.
+                        totalQuantity += qty;
+                        countDaysFound++;
+                    }
+                }
+            }
+        }
+
+        // Durchschnitt bilden
+        if (countDaysFound == 0) {
+            return 0.0;
+        }
+        return totalQuantity / countDaysFound;
+    }
 
 }

@@ -336,17 +336,19 @@
         }
 
 
+
+
         @GetMapping("/generate-history")
         public ResponseEntity<String> generateHistoricalData(
                 @RequestParam(name = "year", required = false) Integer year,
                 @RequestParam(name = "month", required = false) Integer month) {
             try {
-                LOGGER.log(Level.INFO, "Creating historical warenausgang data in chunks.");
+                LOGGER.log(Level.INFO, "Creating historical warenausgang data (day-by-day).");
 
                 // Make sure we have at least 3 products available:
                 ensureProductsExist();
 
-                // If the caller didn't provide year or month, or provided invalid values, pick smaller defaults.
+                // Standardwerte für Jahr/Monat, falls nicht angegeben.
                 if (year == null || year < 2020) {
                     year = 2024;
                 }
@@ -354,19 +356,15 @@
                     month = 1;
                 }
 
-                // We'll just generate one month’s worth of data at a time.
                 LocalDate startOfMonth = LocalDate.of(year, month, 1);
-                LocalDate endOfMonth = startOfMonth.withDayOfMonth(startOfMonth.lengthOfMonth());
+                LocalDate endOfMonth   = startOfMonth.withDayOfMonth(startOfMonth.lengthOfMonth());
 
-                // You can tweak how many Warenausgänge to generate per month
-                int ausgaengeProMonat = 30;
-
-                // Process the chunk
-                generateWarenausgaengeForDateRange(startOfMonth, endOfMonth, ausgaengeProMonat);
+                // Generieren der Warenausgänge (1–8 pro Tag)
+                generateWarenausgaengeForDateRange(startOfMonth, endOfMonth);
 
                 String successMsg = String.format(
-                        "Historical data generated successfully for %d-%02d (Warenausgänge: %d).",
-                        year, month, ausgaengeProMonat
+                        "Historical data (day-by-day) generated successfully for %d-%02d.",
+                        year, month
                 );
                 return ResponseEntity.ok(successMsg);
 
@@ -377,63 +375,64 @@
             }
         }
 
+        /**
+         * Generiert für jeden Tag zwischen startDate und endDate
+         * zwischen 1 und 8 Warenausgänge,
+         * mit je 2 Items (Menge 25–30 Stück, zufällig).
+         */
         private void generateWarenausgaengeForDateRange(
                 LocalDate startDate,
-                LocalDate endDate,
-                int ausgaengeProMonat
+                LocalDate endDate
         ) throws Exception {
 
-            // Move "current" to the start of the given month (or date range)
             LocalDate current = startDate;
-
             while (!current.isAfter(endDate)) {
                 int m = current.getMonthValue();
-                double p1, p2, p3; // Seasonal probabilities
-                if (m == 12 || m == 1 || m == 2) {
+
+                // Saisonale Verteilung (nur für die Produkt-Auswahl, nicht die Menge)
+                double p1, p2, p3;
+                if (m == 12 || m == 1) {
                     // Winter
-                    p1 = 0.5; p2 = 0.05; p3 = 0.45;
-                } else if (m >= 3 && m <= 5) {
-                    // Spring
-                    p1 = 0.3; p2 = 0.5; p3 = 0.1;
+                    p1 = 0.6; p2 = 0.05; p3 = 0.35;
+                } else if (m >= 2 && m <= 5) {
+                    // Frühling
+                    p1 = 0.3; p2 = 0.65; p3 = 0.05;
                 } else if (m >= 6 && m <= 8) {
-                    // Summer
+                    // Sommer
                     p1 = 0.1; p2 = 0.85; p3 = 0.05;
                 } else {
-                    // Autumn (9,10,11)
-                    p1 = 0.5; p2 = 0.3; p3 = 0.2;
+                    // Herbst (9, 10, 11)
+                    p1 = 0.45; p2 = 0.45; p3 = 0.1;
                 }
 
-                int lengthOfMonth = current.lengthOfMonth();
+                // Tägliche Anzahl Warenausgänge: 1..8
+                int warenausgaengeHeute = ThreadLocalRandom.current().nextInt(1, 9);
 
-                // Generate X Warenausgänge for this month
-                for (int i = 0; i < ausgaengeProMonat; i++) {
-                    // Each Warenausgang has 2 randomly chosen product items
+                for (int i = 0; i < warenausgaengeHeute; i++) {
+                    // Hier wird entschieden, wie viele unterschiedliche Produkte in diesem Warenausgang sind: 1..3
+                    int itemCount = ThreadLocalRandom.current().nextInt(1, 4);
+
                     List<WarenausgangItem> items = new ArrayList<>();
-                    items.add(generateWarenausgangItemWithSeason(p1, p2, p3));
-                    items.add(generateWarenausgangItemWithSeason(p1, p2, p3));
+                    for (int j = 0; j < itemCount; j++) {
+                        items.add(generateWarenausgangItemWithSeason(p1, p2, p3));
+                    }
 
-                    // Pick a random day in [1..lengthOfMonth]
-                    int randomDay = ThreadLocalRandom.current().nextInt(1, lengthOfMonth + 1);
-                    LocalDate randomDate = current.withDayOfMonth(randomDay);
-
-                    // Random hour [8..17], random minute [0..59]
-                    int randomHour = ThreadLocalRandom.current().nextInt(8, 18);
+                    // Zufällige Uhrzeit am aktuellen Tag (z.B. 8–17 Uhr)
+                    int randomHour   = ThreadLocalRandom.current().nextInt(8, 18);
                     int randomMinute = ThreadLocalRandom.current().nextInt(0, 60);
-
-                    LocalDateTime warenausgangDateTime = LocalDateTime.of(
-                            randomDate.getYear(),
-                            randomDate.getMonthValue(),
-                            randomDate.getDayOfMonth(),
+                    LocalDateTime dateTime = LocalDateTime.of(
+                            current.getYear(),
+                            current.getMonthValue(),
+                            current.getDayOfMonth(),
                             randomHour,
                             randomMinute
                     );
-                    Timestamp warenausgangTimestamp = Timestamp.valueOf(warenausgangDateTime);
+                    Timestamp timestamp = Timestamp.valueOf(dateTime);
 
-                    // Create the Warenausgang
-                    Warenausgang createdWarenausgang = warenausgangManager
-                            .createWarenausgang(items, warenausgangTimestamp);
+                    // Warenausgang anlegen
+                    warenausgangManager.createWarenausgang(items, timestamp);
 
-                    // Check if the product quantity is below reorderPoint. If so, create Wareneingang
+                    // Ggf. automatischer Wareneingang, wenn Produkt < reorderPoint
                     for (WarenausgangItem item : items) {
                         Product updatedProduct = getProductById(item.getProductId());
                         if (updatedProduct != null
@@ -443,30 +442,26 @@
                                     updatedProduct.getProductId(),
                                     updatedProduct.getReorderQuantity()
                             );
-                            // Create Wareneingang with the same timestamp to replenish
+                            // Wareneingang mit demselben Timestamp
                             wareneingangManager.createWareneingang(
                                     Collections.singletonList(wareneingangItem),
-                                    warenausgangTimestamp
+                                    timestamp
                             );
                         }
                     }
                 }
-                // Move on to next month if you want multiple months in the same call
-                current = current.plusMonths(1);
+
+                // Nächster Tag
+                current = current.plusDays(1);
             }
         }
 
 
-        private Product getProductById(int productId) {
-            try {
-                return productManager.readProductById(productId);
-            } catch (SQLException e) {
-                e.printStackTrace();
-                return null;
-            }
-        }
-
-
+        /**
+         * Wählt anhand saisonaler Wahrscheinlichkeiten aus, welches Produkt (ID 1, 2 oder 3)
+         * verbraucht wird und erzeugt ein `WarenausgangItem` mit einer zufälligen
+         * Menge zwischen 25 und 30 Stück.
+         */
         private WarenausgangItem generateWarenausgangItemWithSeason(double p1, double p2, double p3) {
             double rnd = Math.random();
             int productId;
@@ -478,27 +473,20 @@
                 productId = 3;
             }
 
-            // Zugriff auf den ProductManager und Abrufen des Produkts
-            ProductManager productManager = PostgresDBProductManagement.getPostgresDBProductManagement();
-            int dailyDemand = 50;  // Standardwert, falls Produkt nicht gefunden wird
-            try {
-                Product product = productManager.readProductById(productId);
-                if (product != null) {
-                    dailyDemand = product.getDailyDemand();
-                }
-            } catch (SQLException e) {
-                // Fehlerbehandlung: Loggen und Standardwert verwenden
-                Logger.getLogger(getClass().getName()).log(Level.SEVERE, "Fehler beim Abrufen des Produkts mit ID " + productId, e);
-            }
-
-            // Berechnung der Menge basierend auf dailyDemand ±15%
-            double variationFactor = 1 + ThreadLocalRandom.current().nextDouble(-0.15, 0.15);
-            int quantity = (int) Math.round(dailyDemand * variationFactor);
-            // Sicherstellen, dass die Menge mindestens 1 beträgt
-            quantity = Math.max(quantity, 1);
+            int quantity = ThreadLocalRandom.current().nextInt(1, 25);
 
             return new WarenausgangItem(productId, quantity);
         }
+
+        private Product getProductById(int productId) {
+            try {
+                return productManager.readProductById(productId);
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return null;
+            }
+        }
+
 
 
         private void ensureProductsExist() throws Exception {
@@ -733,18 +721,26 @@
                         for (Product product : allProducts) {
 
                             // 2a) Historischen 7-Tage-Durchschnitt laden
-                            double historicalAvg = warenausgangManager.calculateAverageDailyDemand(product.getProductId(), conn);
+
+
+// NEU: für denselben Kalendertag der letzten 5 Jahre
+                            double historicalAvg = warenausgangManager.calculateSameDayHistoricalAverage(
+                                    product.getProductId(),
+                                    parsedDate,
+                                    5,       // Anzahl Jahre zurück, hier fest 5
+                                    conn
+                            );
+
                             if (historicalAvg <= 0) {
                                 historicalAvg = 5.0; // Minimaler Fallback
                             }
 
-                            // 2b) Wetterfaktor + Saisonfaktor
+
                             double weatherFactor = getWeatherFactor(product.getProductId(), avgTemp);
                             double seasonFactor  = getSeasonFactor(product.getProductId(), dateString);
 
-                            // 2c) Grund-Forecast
                             double base = (alpha * historicalAvg)
-                                    * ((beta * weatherFactor * (gamma * (1.0 + seasonFactor))));
+                                    * ((beta * weatherFactor * (gamma * (1.0 + seasonFactor)))/2);
 
                             // 2d) Falls dieses Produkt in den Top-2 und Regen > 50%, +5%
                             if (top2ProductIds.contains(product.getProductId())) {
@@ -796,18 +792,6 @@
                                 newReorderPoint,
                                 reorderQty);
 
-                        // Falls quantity < reorderPoint => Auto Wareneingang
-                        Product updatedP = productManager.readProductById(product.getProductId());
-                        if (updatedP != null && updatedP.getProductQuantity() < updatedP.getReorderPoint()) {
-                            WareneingangItem item = new WareneingangItem(
-                                    updatedP.getProductId(),
-                                    updatedP.getReorderQuantity()
-                            );
-                            wareneingangManager.createWareneingang(List.of(item));
-                            LOGGER.log(Level.INFO,
-                                    "Automatische Nachbestellung für ProductID=" + updatedP.getProductId()
-                                            + " mit Menge=" + updatedP.getReorderQuantity());
-                        }
                     }
                 }
 
@@ -900,13 +884,13 @@
 
         private double seasonFactorProduct1(int x) {
             // g(x) = | - ( cos(π/6 * x) + 1.2 ) * 0.4 |
-            double val = -(Math.cos(Math.PI / 6.0 * x) + 1.2) * 0.4;
+            double val = -(Math.cos(Math.PI / 6.0 * x) + 1.2) * 0.45;
             return Math.abs(val);
         }
 
         private double seasonFactorProduct2(int x) {
             // f(x) = | - ( cos(π/6 * x) - 1.2 ) * 0.4 |
-            double val = -(Math.cos(Math.PI / 6.0 * x) - 1.2) * 0.4;
+            double val = -(Math.cos(Math.PI / 6.0 * x) - 1.2) * 0.45;
             return Math.abs(val);
         }
 

@@ -7,6 +7,7 @@ import com.example.fff.model.WarenausgangItem;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.util.List;
 
 public interface WarenausgangManager {
@@ -26,4 +27,11 @@ public interface WarenausgangManager {
     List<TagesStatistik> getWarenausgaengeProTag(Timestamp from, Timestamp to) throws Exception;
 
     boolean deleteWarenausgang(int warenausgangId) throws Exception;
+
+    double calculateSameDayHistoricalAverage(
+            int productId,
+            LocalDate targetDate,
+            int years,
+            Connection connection
+    ) throws SQLException;
 }

@@ -137,8 +137,7 @@
 
             @Override
             public Product addProduct(String productName, String productType, int quantity) throws Exception {
-                // Initialer daily_demand ist 1000
-                int initialDailyDemand = 35;
+                int initialDailyDemand = 15;
                 return addProduct(productName, productType, quantity, initialDailyDemand, initialDailyDemand * 7); // reorderPoint = dailyDemand * 3
             }
 
@@ -168,7 +167,7 @@
                     connection = basicDataSource.getConnection();
                     connection.setAutoCommit(false);
 
-                    // Aktuelle Gesamtmenge im Lager prüfen (Maximal 20000)
+                    // Aktuelle Gesamtmenge im Lager prüfen (Maximal 8000)
                     String sumSQL = "SELECT COALESCE(SUM(quantity), 0) AS total_quantity FROM products";
                     sumStmt = connection.prepareStatement(sumSQL);
                     rs = sumStmt.executeQuery();
@@ -179,9 +178,9 @@
                     rs.close();
                     sumStmt.close();
 
-                    if (currentTotalQuantity + quantity > 200000) {
+                    if (currentTotalQuantity + quantity > 8000) {
                         connection.rollback();
-                        throw new Exception("Cannot add product. Adding " + quantity + " units would exceed the total warehouse capacity of 20000.");
+                        throw new Exception("Cannot add product. Adding " + quantity + " units would exceed the total warehouse capacity of 8000.");
                     }
 
                     // Prüfen, ob das Produkt bereits existiert
