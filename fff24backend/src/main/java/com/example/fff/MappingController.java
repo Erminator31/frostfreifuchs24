@@ -733,7 +733,7 @@
                             double weatherFactor = getWeatherFactor(product.getProductId(), avgTemp);
                             double seasonFactor  = getSeasonFactor(product.getProductId(), dateString);
 
-                            LOGGER.log(Level.INFO, "historical avg für product: " + product.getProductName() + " = " + historicalAvg);
+                            LOGGER.log(Level.INFO, "historical avg für product: " + product.getProductName() + " = " + historicalAvg + " season factor: " + seasonFactor + " weatherfactor: " + weatherFactor);
                             double base = (alpha * historicalAvg)
                                     * ((beta * weatherFactor * (gamma * (1.0 + seasonFactor)))/2);
 
