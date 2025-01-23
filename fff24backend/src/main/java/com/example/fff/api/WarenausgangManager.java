@@ -3,6 +3,7 @@ package com.example.fff.api;
 import com.example.fff.model.TagesStatistik;
 import com.example.fff.model.Warenausgang;
 import com.example.fff.model.WarenausgangItem;
+import org.apache.commons.dbcp.BasicDataSource;
 
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -11,6 +12,8 @@ import java.time.LocalDate;
 import java.util.List;
 
 public interface WarenausgangManager {
+    BasicDataSource getDataSource();
+
     void createWarenausgangTable() throws Exception;
     void createWarenausgangItemTable() throws Exception;
     Warenausgang createWarenausgang(List<WarenausgangItem> items) throws Exception;

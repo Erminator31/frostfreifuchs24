@@ -41,6 +41,7 @@ public class PostgresDBWarenausgangManagement implements WarenausgangManager {
         return instance;
     }
 
+    @Override
     public BasicDataSource getDataSource() {
         return basicDataSource;
     }

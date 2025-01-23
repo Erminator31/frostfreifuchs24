@@ -27,7 +27,7 @@ public class DailyDemandScheduler {
     /**
      * Tägliche Aufgabe zur Aktualisierung des dailyDemand um 1:00 Uhr morgens.
      */
-    @Scheduled(cron = "0 0 23 * * ?") // täglich um Mitternacht
+    @Scheduled(cron = "0 0 23 * * ?") 
     public void runForecastDaily() throws SQLException {
         LOGGER.log(Level.INFO, "Scheduled Task: runForecastDaily() aufgerufen.");
 
