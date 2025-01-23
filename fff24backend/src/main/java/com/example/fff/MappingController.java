@@ -733,12 +733,13 @@
                             double weatherFactor = getWeatherFactor(product.getProductId(), avgTemp);
                             double seasonFactor  = getSeasonFactor(product.getProductId(), dateString);
 
+                            LOGGER.log(Level.INFO, "historical avg für product: " + product.getProductName() + " = " + historicalAvg);
                             double base = (alpha * historicalAvg)
                                     * ((beta * weatherFactor * (gamma * (1.0 + seasonFactor)))/2);
 
                             // 2d) Falls dieses Produkt in den Top-2 und Regen > 50%, +5%
                             if (top2ProductIds.contains(product.getProductId())) {
-                                base = base * 1.05; // +5%
+                                base = base * 1.1; // +5%
                             }
 
                             // 2e) Feiertag/Weekend-Reduktion?
