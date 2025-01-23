@@ -735,7 +735,7 @@
 
                             LOGGER.log(Level.INFO, "historical avg für product: " + product.getProductName() + " = " + historicalAvg + " season factor: " + seasonFactor + " weatherfactor: " + weatherFactor);
                             double base = (alpha * historicalAvg)
-                                    * ((beta * weatherFactor * (gamma * (1.0 + seasonFactor)))/2);
+                                    * ((beta * weatherFactor + (gamma * (1.0 + seasonFactor)))/2);
 
                             // 2d) Falls dieses Produkt in den Top-2 und Regen > 50%, +5%
                             if (top2ProductIds.contains(product.getProductId())) {
