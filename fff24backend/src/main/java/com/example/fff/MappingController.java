@@ -340,21 +340,15 @@
 
         @GetMapping("/generate-history")
         public ResponseEntity<String> generateHistoricalData(
-                @RequestParam(name = "year", required = false) Integer year,
-                @RequestParam(name = "month", required = false) Integer month) {
+                @RequestParam(name = "year", required = true) Integer year,
+                @RequestParam(name = "month", required = true) Integer month) {
             try {
                 LOGGER.log(Level.INFO, "Creating historical warenausgang data (day-by-day).");
 
                 // Make sure we have at least 3 products available:
                 ensureProductsExist();
 
-                // Standardwerte für Jahr/Monat, falls nicht angegeben.
-                if (year == null || year < 2020) {
-                    year = 2024;
-                }
-                if (month == null || month < 1 || month > 12) {
-                    month = 1;
-                }
+
 
                 LocalDate startOfMonth = LocalDate.of(year, month, 1);
                 LocalDate endOfMonth   = startOfMonth.withDayOfMonth(startOfMonth.lengthOfMonth());
