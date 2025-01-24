@@ -491,13 +491,13 @@
             boolean has3 = existing.stream().anyMatch(p -> p.getProductId() == 3);
 
             if (!has1) {
-                productManager.addProduct("Klaus Winter", "Mit Frostschutz", 1000);
+                productManager.addProduct("Klaus Winter", "With antifreeze", 1000);
             }
             if (!has2) {
-                productManager.addProduct("Klaus Summer", "Ohne Frostschutz", 1000);
+                productManager.addProduct("Klaus Summer", "Without antifreeze", 1000);
             }
             if (!has3) {
-                productManager.addProduct("Klaus Xtreme", "Mit Frostschutz", 1000);
+                productManager.addProduct("Klaus Xtreme", "With antifreeze", 1000);
             }
         }
 
@@ -834,7 +834,6 @@
         private record DailyTemperature(String dateString, double avgTemp) {}
 
         private double getWeatherFactor(int productId, double temperature) {
-            // Falls < -5 Grad
             if (temperature < -5) {
                 return switch (productId) {
                     case 1 -> 0.7;
@@ -843,8 +842,7 @@
                     default -> 1.0; // Fallback
                 };
             }
-            // Falls < 4 Grad
-            else if (temperature < 4) {
+            else if (temperature <= 4) {
                 return switch (productId) {
                     case 1 -> 1.0;
                     case 2 -> 0.2;
@@ -852,7 +850,7 @@
                     default -> 1.0;
                 };
             }
-            // Falls >= 4 Grad
+            // Falls > 4 Grad
             else {
                 return switch (productId) {
                     case 1 -> 0.1;

@@ -581,6 +581,10 @@
                     sql.append("quantity = ?, ");
                     params.add(updates.get("productQuantity"));
                 }
+                if (updates.containsKey("producttype")) {
+                    sql.append("producttype = ?, ");
+                    params.add(updates.get("producttype"));
+                }
 
                 // Entferne das letzte Komma und Leerzeichen
                 if (params.isEmpty()) {
