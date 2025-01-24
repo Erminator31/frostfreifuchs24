@@ -14,9 +14,7 @@
     import org.springframework.scheduling.annotation.EnableScheduling;
     import org.springframework.web.bind.annotation.*;
 
-    import java.sql.Connection;
-    import java.sql.SQLException;
-    import java.sql.Timestamp;
+    import java.sql.*;
     import java.time.LocalDate;
     import java.time.DayOfWeek;
     import java.time.MonthDay;
@@ -1158,6 +1156,136 @@
                         .body("Error deleting warenausgang: " + e.getMessage());
             }
         }
+
+        @GetMapping("/lagerkosten")
+        public ResponseEntity<?> getLagerkosten(
+                @RequestParam(value = "pBasis", defaultValue = "1000") double pBasis,
+                @RequestParam(value = "kP", defaultValue = "7000") double kP,
+                @RequestParam(value = "grundkosten", defaultValue = "1000") double grundkosten
+        ) {
+            // 1) Fetch current temperature (for "today") via Open-Meteo
+            //    We can re-use fetchWeatherData(...) but set forecast_days=1
+            //    Then parse day-0 in the daily block to get average temperature
+            try {
+                // In a real application, adjust lat/long, and pass the local timezone if needed
+                String weatherUrl = "https://api.open-meteo.com/v1/forecast"
+                        + "?latitude=49.3536"
+                        + "&longitude=9.1511"
+                        + "&daily=temperature_2m_max,temperature_2m_min"
+                        + "&forecast_days=1"
+                        + "&timezone=Europe/Berlin";
+
+                String weatherJson = fetchWeatherData(weatherUrl);
+                org.json.JSONObject json = new org.json.JSONObject(weatherJson);
+                org.json.JSONObject daily = json.getJSONObject("daily");
+
+                // We expect arrays of length=1 for "time", "temperature_2m_max", "temperature_2m_min"
+                double tmax = daily.getJSONArray("temperature_2m_max").optDouble(0, 0.0);
+                double tmin = daily.getJSONArray("temperature_2m_min").optDouble(0, 0.0);
+                // Simple average for the day
+                double currentTemperature = (tmax + tmin) / 2.0;
+
+                // 2) Fetch electricity price for 24h from now, parse average => EUR/MWh => convert to EUR/kWh
+                //    For demonstration, let's assume "now" is a Unix epoch.
+                //    You can adapt “start” and “end” times to be exactly 24 hours.
+                long nowUnix = System.currentTimeMillis() / 1000L;              // current time in seconds
+                long oneDayLater = nowUnix + 24L * 3600L;                       // +24h in seconds
+
+                // Example URL:
+                // https://api.energy-charts.info/price?bzn=DE-LU&start=1737743000&end=1737756000
+                // We'll pass nowUnix as start, oneDayLater as end
+                String priceUrl = String.format(
+                        "https://api.energy-charts.info/price?bzn=DE-LU&start=%d&end=%d",
+                        nowUnix, oneDayLater
+                );
+                String priceJson = fetchElectricityPriceData(priceUrl);
+                org.json.JSONObject priceObj = new org.json.JSONObject(priceJson);
+
+                // The array "price" is in EUR / MWh, e.g. [84.99, 80.79, 91.97, 86.29]
+                org.json.JSONArray priceArray = priceObj.getJSONArray("price");
+                double sumPrice = 0.0;
+                for (int i = 0; i < priceArray.length(); i++) {
+                    sumPrice += priceArray.getDouble(i);
+                }
+                double avgPriceMWh = (priceArray.length() == 0) ? 0 : (sumPrice / priceArray.length());
+                // Convert EUR/MWh to EUR/kWh => /1000
+                double avgPriceKWh = avgPriceMWh / 1000.0;
+
+                // 3) Sum up the current total warehouse quantity
+                int totalQuantity = getTotalWarehouseQuantity();
+
+                // 4) Apply your formula(s):
+                //    If T > 0 => P = pBasis + kP*(1/T)
+                //    If T < 0 => P = pBasis + kP*|T|
+                double P;
+                if (currentTemperature > 0) {
+                    P = pBasis + kP * (1.0 / currentTemperature);
+                } else {
+                    // T <= 0
+                    double absT = Math.abs(currentTemperature);
+                    P = pBasis + kP * absT;
+                }
+
+                // Stromkosten = Stromverbrauch * Strompreis
+                double stromkosten = P * avgPriceKWh;
+                // Betriebskosten = Stromkosten + Grundkosten
+                double betriebskosten = stromkosten + grundkosten;
+
+                // Optional: cost per item (if totalQuantity>0)
+                double costPerItem = 0.0;
+                if (totalQuantity > 0) {
+                    costPerItem = betriebskosten / totalQuantity;
+                }
+
+                // 5) Build JSON response
+                java.util.Map<String,Object> result = new java.util.HashMap<>();
+                result.put("temperature", currentTemperature);
+                result.put("electricityPriceEURperMWh", avgPriceMWh);
+                result.put("electricityPriceEURperkWh", avgPriceKWh);
+                result.put("totalQuantity", totalQuantity);
+                result.put("stromverbrauchKWh", P);
+                result.put("grundkosten", grundkosten);
+                result.put("stromkosten", stromkosten);
+                result.put("betriebskosten", betriebskosten);
+                result.put("costPerItem", costPerItem);
+
+                return ResponseEntity.ok(result);
+
+            } catch (Exception e) {
+                LOGGER.log(Level.SEVERE, "Fehler in /lagerkosten: " + e.getMessage(), e);
+                return ResponseEntity
+                        .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body("Fehler bei Lagerkosten-Berechnung: " + e.getMessage());
+            }
+        }
+
+        private String fetchElectricityPriceData(String url) throws Exception {
+            java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create(url))
+                    .GET()
+                    .build();
+            java.net.http.HttpResponse<String> response = client.send(
+                    request,
+                    java.net.http.HttpResponse.BodyHandlers.ofString()
+            );
+            if (response.statusCode() == 200) {
+                return response.body();
+            } else {
+                throw new RuntimeException("Fehler beim Abruf der Strompreis-API. Status=" + response.statusCode());
+            }
+        }
+        private int getTotalWarehouseQuantity() throws SQLException {
+            try (Connection conn = productManager.getDataSource().getConnection();
+                 Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery("SELECT COALESCE(SUM(quantity), 0) AS total FROM products")) {
+                if (rs.next()) {
+                    return rs.getInt("total");
+                }
+            }
+            return 0;
+        }
+
 
 
     }

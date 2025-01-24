@@ -2,12 +2,17 @@ package com.example.fff.api;
 
 import com.example.fff.model.ForecastWeights;
 import com.example.fff.model.Product;
+import org.apache.commons.dbcp.BasicDataSource;
 
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 
 public interface ProductManager {
+
+
+    BasicDataSource getDataSource();
+
     void createProductTable() throws Exception;
 
 

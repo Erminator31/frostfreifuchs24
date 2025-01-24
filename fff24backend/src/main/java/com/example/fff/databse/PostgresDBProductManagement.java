@@ -24,6 +24,11 @@
 
             BasicDataSource basicDataSource;
 
+            @Override
+            public BasicDataSource getDataSource(){
+                return basicDataSource;
+            }
+
             // Singleton pattern for the manager implementation
             private static PostgresDBProductManagement postgresDBProductManagement = null;
 

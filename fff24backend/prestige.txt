@@ -123,3 +123,5 @@ Content-Type: application/json
 ### Warenausgang löschen (DELETE /warenausgang/delete/{id})
 DELETE https://backend-frostfreifuchs-b240fdbecd00.herokuapp.com/api/warenausgang/delete/
 
+### Lagerhaltungskosten berechnen (GET /api/lagerkosten)
+DELETE https://backend-frostfreifuchs-b240fdbecd00.herokuapp.com/api/lagerkosten?pBasis=1000&kP=7000&grundkosten=1500
