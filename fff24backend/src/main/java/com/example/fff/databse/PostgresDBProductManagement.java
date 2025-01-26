@@ -118,12 +118,11 @@
 
             @Override
             public Product readProductById(int productId) throws SQLException {
-                String sql = "SELECT productid, productname, producttype, quantity, daily_demand, reorder_point FROM products WHERE productid = ?";
+                String sql = "SELECT productid, productname, producttype, quantity, daily_demand, reorder_point, reorder_quantity FROM products WHERE productid = ?";
 
                 try (Connection connection = basicDataSource.getConnection();
                      PreparedStatement stmt = connection.prepareStatement(sql)) {
                     stmt.setInt(1, productId);
-
                     try (ResultSet rs = stmt.executeQuery()) {
                         if (rs.next()) {
                             return new Product(
@@ -132,18 +131,20 @@
                                     rs.getString("producttype"),
                                     rs.getInt("quantity"),
                                     rs.getInt("daily_demand"),
-                                    rs.getInt("reorder_point")
+                                    rs.getInt("reorder_point"),
+                                    rs.getInt("reorder_quantity")
                             );
                         }
                     }
                 }
+
                 return null;
             }
 
             @Override
             public Product addProduct(String productName, String productType, int quantity) throws Exception {
                 int initialDailyDemand = 15;
-                return addProduct(productName, productType, quantity, initialDailyDemand, initialDailyDemand * 7); // reorderPoint = dailyDemand * 3
+                return addProduct(productName, productType, quantity, initialDailyDemand, initialDailyDemand * 3, initialDailyDemand*14);
             }
 
             /**
@@ -157,7 +158,7 @@
              * @return Das erstellte oder aktualisierte Produkt.
              * @throws Exception Wenn ein Fehler auftritt.
              */
-            public Product addProduct(String productName, String productType, int quantity, int dailyDemand, int reorderPoint) throws Exception {
+            public Product addProduct(String productName, String productType, int quantity, int dailyDemand, int reorderPoint, int reorderQuantity) throws Exception {
                 final Logger createProductLogger = Logger.getLogger("CreateProductLogger");
                 createProductLogger.log(Level.INFO, "Start creating or updating product: " + productName + " with quantity " + quantity);
 
@@ -189,7 +190,7 @@
                     }
 
                     // Prüfen, ob das Produkt bereits existiert
-                    String checkProductSQL = "SELECT productid, quantity, daily_demand, reorder_point FROM products WHERE productname = ? AND producttype = ?";
+                    String checkProductSQL = "SELECT productid, quantity, daily_demand, reorder_point, reorder_quantity FROM products WHERE productname = ? AND producttype = ?";
                     checkProductStmt = connection.prepareStatement(checkProductSQL);
                     checkProductStmt.setString(1, productName);
                     checkProductStmt.setString(2, productType);
@@ -223,7 +224,7 @@
                         }
 
                         connection.commit();
-                        return new Product(productId, productName, productType, newQuantity, newDailyDemand, newReorderPoint);
+                        return new Product(productId, productName, productType, newQuantity, newDailyDemand, newReorderPoint, newReorderQuantity);
 
                     } else {
                         // Produkt existiert nicht, neu anlegen
@@ -237,7 +238,7 @@
                         insertStmt.setInt(3, quantity);
                         insertStmt.setInt(4, dailyDemand);
                         insertStmt.setInt(5, reorderPoint);
-                        insertStmt.setInt(6, dailyDemand * 14); // reorderQuantity = dailyDemand * 14
+                        insertStmt.setInt(6, reorderQuantity); // reorderQuantity = dailyDemand * 14
 
                         rs = insertStmt.executeQuery();
                         int generatedId = -1;
@@ -249,7 +250,7 @@
                         }
 
                         connection.commit();
-                        return new Product(generatedId, productName, productType, quantity, dailyDemand, reorderPoint);
+                        return new Product(generatedId, productName, productType, quantity, dailyDemand, reorderPoint, reorderQuantity);
                     }
 
                 } catch (Exception e) {
@@ -319,7 +320,8 @@
                                     rs.getString("producttype"),
                                     rs.getInt("quantity"),
                                     rs.getInt("daily_demand"),
-                                    rs.getInt("reorder_point")
+                                    rs.getInt("reorder_point"),
+                                    rs.getInt("reorder_quantity")
 
                             ));
                         }

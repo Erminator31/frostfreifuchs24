@@ -34,14 +34,14 @@ public class Product implements ProductInterface {
      * @param dailyDemand     Der tägliche Bedarf des Produkts.
      * @param reorderPoint    Der Schwellenwert, bei dem nachbestellt werden soll.
      */
-    public Product(int productId, String productName, String productType, int quantity, int dailyDemand, int reorderPoint) {
+    public Product(int productId, String productName, String productType, int quantity, int dailyDemand, int reorderPoint, int reorderQuantity) {
         this.productId = productId;
         this.productName = productName;
         this.productType = productType;
         this.quantity = quantity;
         this.dailyDemand = dailyDemand;
         this.reorderPoint = reorderPoint;
-        this.reorderQuantity = calculateReorderQuantity();
+        this.reorderQuantity = reorderQuantity;
     }
 
     // Getter und Setter für alle Felder
@@ -54,7 +54,6 @@ public class Product implements ProductInterface {
     @Override
     public void setDailyDemand(int dailyDemand) {
         this.dailyDemand = dailyDemand;
-        this.reorderQuantity = calculateReorderQuantity(); // Aktualisierung der reorderQuantity
     }
 
     @Override
@@ -65,6 +64,11 @@ public class Product implements ProductInterface {
     @Override
     public void setReorderPoint(int reorderPoint) {
         this.reorderPoint = reorderPoint;
+    }
+
+    @Override
+    public void setReorderQuantity(int reorderQuantity) {
+        this.reorderQuantity = reorderQuantity;
     }
 
     @Override
@@ -113,14 +117,6 @@ public class Product implements ProductInterface {
         this.productType = productType;
     }
 
-    /**
-     * Berechnet die reorderQuantity basierend auf dem dailyDemand für 14 Tage.
-     *
-     * @return Die berechnete reorderQuantity.
-     */
-    private int calculateReorderQuantity() {
-        return this.dailyDemand * 14;
-    }
 
     /**
      * Gibt die zusätzlichen Eigenschaften zurück, die nicht explizit in der Klasse definiert sind.

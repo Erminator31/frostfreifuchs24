@@ -20,7 +20,7 @@ public interface ProductManager {
 
     Product addProduct(String productName, String productType, int quantity) throws Exception;
 
-    Product addProduct(String productName, String productType, int quantity, int dailyDeman, int reorderPoint) throws Exception;
+    Product addProduct(String productName, String productType, int quantity, int dailyDemand, int reorderPoint, int reorderQuantity) throws Exception;
 
     List<Product> readProducts(String productName, String productType);
 

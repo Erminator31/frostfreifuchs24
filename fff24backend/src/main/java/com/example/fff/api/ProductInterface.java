@@ -10,6 +10,8 @@ public interface ProductInterface {
 
     void setReorderPoint(int reorderPoint);
 
+    void setReorderQuantity(int reorderQuantity);
+
     int getReorderQuantity();
 
 
