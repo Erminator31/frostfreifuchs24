@@ -453,7 +453,7 @@ public class PostgresDBWarenausgangManagement implements WarenausgangManager {
     public double calculateDemandInPeriod(int productId, LocalDate from, LocalDate to, Connection conn) throws SQLException {
         String sql = """
         SELECT COALESCE(SUM(wai.quantity), 0) AS total
-          FROM warenausgangitems wai
+          FROM warenausgang_items wai
           JOIN warenausgang wa ON wai.warenausgangid = wa.id
          WHERE wai.productid = ?
            AND wa.warenausgangdate >= ?
