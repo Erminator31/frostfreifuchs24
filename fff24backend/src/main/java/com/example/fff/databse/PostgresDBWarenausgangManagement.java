@@ -454,7 +454,7 @@ public class PostgresDBWarenausgangManagement implements WarenausgangManager {
         String sql = """
         SELECT COALESCE(SUM(wai.quantity), 0) AS total
           FROM warenausgang_items wai
-          JOIN warenausgang wa ON wai.warenausgangid = wa.id
+          JOIN warenausgaenge wa ON wai.warenausgangid = wa.id
          WHERE wai.productid = ?
            AND wa.warenausgangdate >= ?
            AND wa.warenausgangdate < ?
