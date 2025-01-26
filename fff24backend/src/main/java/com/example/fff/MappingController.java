@@ -748,6 +748,8 @@
                     }
 
                     // EOQ = sqrt( (2 * S * D) / H )
+                    LOGGER.log(Level.INFO, "ordercost: " + orderCost + " annualdemand: " + annualDemand
+                            + " costPerItem" + costPerItem);
                     double eoq = Math.sqrt( (2.0 * orderCost * annualDemand) / costPerItem );
                     int newReorderQuantity = (int)Math.round(eoq);
 
