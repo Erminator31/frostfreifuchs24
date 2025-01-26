@@ -449,4 +449,29 @@ public class PostgresDBWarenausgangManagement implements WarenausgangManager {
         return totalQuantity / countDaysFound;
     }
 
+    @Override
+    public double calculateDemandInPeriod(int productId, LocalDate from, LocalDate to, Connection conn) throws SQLException {
+        String sql = """
+        SELECT COALESCE(SUM(wai.quantity), 0) AS total
+          FROM warenausgangitems wai
+          JOIN warenausgang wa ON wai.warenausgangid = wa.id
+         WHERE wai.productid = ?
+           AND wa.warenausgangdate >= ?
+           AND wa.warenausgangdate < ?
+    """;
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, productId);
+            // from inclusive
+            ps.setTimestamp(2, Timestamp.valueOf(from.atStartOfDay()));
+            // to exclusive => +1 Tag
+            ps.setTimestamp(3, Timestamp.valueOf(to.plusDays(1).atStartOfDay()));
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getDouble("total");
+                }
+            }
+        }
+        return 0.0;
+    }
+
 }

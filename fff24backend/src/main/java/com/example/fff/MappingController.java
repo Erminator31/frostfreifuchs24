@@ -7,7 +7,6 @@
     import com.example.fff.databse.PostgresDBWarenausgangManagement;
     import com.example.fff.databse.PostgresDBWareneingangManagement;
     import com.example.fff.model.*;
-    import org.springframework.beans.factory.annotation.Autowired;
     import org.springframework.http.HttpStatus;
     import org.springframework.http.MediaType;
     import org.springframework.http.ResponseEntity;
@@ -30,13 +29,13 @@
      * It contains methods for retrieving information, creating tables, adding and removing products, creating warenausgangs and wareneingangs,
      * generating historical data, updating daily demand, getting forecasts, and managing weather and season factors.
      * It also includes private helper methods for generating warenausgaenge, fetching weather data, and calculating factors.
-     *
+
      * Fields:
      * productManager - interface for managing products
      * warenausgangManager - manager for warenausgangs
      * wareneingangManager - manager for wareneingangs
      * LOGGER - Logger for logging messages
-     *
+
      * Methods:
      * - getInfo: Retrieves information with a given name
      * - createProductTable: Creates a table for products
@@ -98,7 +97,6 @@
         /**
          * LOGGER is a static final Logger instance used for logging within the MappingController class.
          */
-        @Autowired
         private static final Logger LOGGER = Logger.getLogger(MappingController.class.getName());
 
         /**
@@ -602,197 +600,170 @@
         ) {
             LOGGER.log(Level.INFO, "Received /forecast request mit forecastDays=" + forecastDays);
 
-            try {
-                // 1) Aktuelle Weights aus DB laden
+            // Datenbank-Connection für Abfragen
+            try (Connection conn = PostgresDBWarenausgangManagement.getInstance()
+                    .getDataSource().getConnection()) {
+
+                // 1) Forecast-Weights laden und ggf. updaten
                 ForecastWeights currentWeights = productManager.getForecastWeights();
                 double alpha = currentWeights.getAlpha();
                 double beta  = currentWeights.getBeta();
                 double gamma = currentWeights.getGamma();
 
-                // 2) Falls im Request neue Werte übergeben wurden -> DB updaten
                 boolean changed = false;
-                if (alphaParam != null && !alphaParam.equals(alpha)) {
-                    alpha = alphaParam;
-                    changed = true;
-                }
-                if (betaParam != null && !betaParam.equals(beta)) {
-                    beta = betaParam;
-                    changed = true;
-                }
-                if (gammaParam != null && !gammaParam.equals(gamma)) {
-                    gamma = gammaParam;
-                    changed = true;
-                }
+                if (alphaParam != null && !alphaParam.equals(alpha)) { alpha = alphaParam; changed = true; }
+                if (betaParam  != null && !betaParam.equals(beta))   { beta  = betaParam;  changed = true; }
+                if (gammaParam != null && !gammaParam.equals(gamma)) { gamma = gammaParam; changed = true; }
                 if (changed) {
                     productManager.updateForecastWeights(alpha, beta, gamma);
                     LOGGER.log(Level.INFO, "Forecast weights updated in DB: alpha=" + alpha
                             + ", beta=" + beta + ", gamma=" + gamma);
                 }
 
-                // 3) Wetterdaten abrufen
+                // 2) Wetter-API abrufen, z.B. via fetchWeatherData()
                 String apiUrl = "https://api.open-meteo.com/v1/forecast"
                         + "?latitude=49.3536"
                         + "&longitude=9.1511"
                         + "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max"
-                        + "&forecast_days=" + forecastDays; // default=14
-
+                        + "&forecast_days=" + forecastDays;
                 String weatherJson = fetchWeatherData(apiUrl);
-
-                // 4) JSON parsen
                 org.json.JSONObject json = new org.json.JSONObject(weatherJson);
                 org.json.JSONObject daily = json.getJSONObject("daily");
+                org.json.JSONArray timeArray     = daily.getJSONArray("time");
+                org.json.JSONArray tempMaxArray  = daily.getJSONArray("temperature_2m_max");
+                org.json.JSONArray tempMinArray  = daily.getJSONArray("temperature_2m_min");
+                org.json.JSONArray precProbArray = daily.getJSONArray("precipitation_probability_max");
 
-                org.json.JSONArray timeArray      = daily.getJSONArray("time");
-                org.json.JSONArray tempMaxArray   = daily.getJSONArray("temperature_2m_max");
-                org.json.JSONArray tempMinArray   = daily.getJSONArray("temperature_2m_min");
-                // NEU: Regenwahrscheinlichkeit
-                org.json.JSONArray precProbArray  = daily.getJSONArray("precipitation_probability_max");
+                // 3) Alle Produkte laden
+                List<Product> allProducts = productManager.readProducts(null, null);
 
-                // 5) Tagesdaten sammeln
+                // 4) Datenstrukturen vorbereiten
                 List<String> dateList = new ArrayList<>();
                 DateTimeFormatter inputFmt  = DateTimeFormatter.ofPattern("yyyy-MM-dd");
                 DateTimeFormatter outputFmt = DateTimeFormatter.ofPattern("dd. MM. yyyy");
 
-                // Vorbereiten: Alle Produkte laden
-                List<Product> allProducts = productManager.readProducts(null, null);
-
-                // Wir bauen eine Struktur:
-                // dataMap[ProduktName] -> Forecast-Liste für forecastDays
+                // Map -> Produktname => Liste Forecastwerte
                 Map<String, List<Double>> dataMap = new LinkedHashMap<>();
                 for (Product p : allProducts) {
                     dataMap.put(p.getProductName(), new ArrayList<>());
                 }
 
-                // Connection für DB-Operationen (z.B. Reorder-Berechnung)
-                try (Connection conn = PostgresDBWarenausgangManagement.getInstance().getDataSource().getConnection())
-                {
-                    // Loop über alle Tage
-                    for (int i = 0; i < timeArray.length(); i++) {
+                // 5) Pro Tag Forecast berechnen
+                for (int i = 0; i < timeArray.length(); i++) {
+                    String dateString = timeArray.getString(i);
+                    double tmax = tempMaxArray.optDouble(i, 0.0);
+                    double tmin = tempMinArray.optDouble(i, 0.0);
+                    double avgTemp = (tmax + tmin) / 2.0;
+                    double precipProb = precProbArray.optDouble(i, 0.0);
 
-                        // Tag, Temp
-                        String dateString = timeArray.getString(i);
-                        double tmax  = tempMaxArray.optDouble(i, 0.0);
-                        double tmin  = tempMinArray.optDouble(i, 0.0);
-                        double avgTemp = (tmax + tmin) / 2.0;
-
-                        // NEU: Regenwahrscheinlichkeit
-                        double precipProb = precProbArray.optDouble(i, 0.0);
-
-                        // Hübsches Datumsformat fürs Frontend
-                        LocalDate parsedDate = LocalDate.parse(dateString, inputFmt);
-                        String formattedDate = parsedDate.format(outputFmt);
-                        // Falls in dateList noch nicht enthalten, hinzufügen
-                        if (dateList.size() < timeArray.length()) {
-                            dateList.add(formattedDate);
-                        }
-
-                        // ---------------------------------------------
-                        // Schritt 1: Top-2-Produkte bzgl. weatherFactor ermitteln
-                        // ---------------------------------------------
-                        // Wir speichern (product, weatherFactor) in einer Liste:
-                        List<ProductWFactor> wFactors = new ArrayList<>();
-                        for (Product product : allProducts) {
-                            double wf = getWeatherFactor(product.getProductId(), avgTemp);
-                            wFactors.add(new ProductWFactor(product, wf));
-                        }
-                        // Sortieren nach wf absteigend
-                        wFactors.sort((a, b) -> Double.compare(b.weatherFactor(), a.weatherFactor()));
-
-                        // Falls precipProb > 50 => top2 bekommen +5%
-                        // (Speichern wir in einer Set-Struktur)
-                        Set<Integer> top2ProductIds = new HashSet<>();
-                        if (precipProb > 50.0 && wFactors.size() >= 2) {
-                            top2ProductIds.add(wFactors.get(0).product().getProductId());
-                            top2ProductIds.add(wFactors.get(1).product().getProductId());
-                        }
-                        // (Falls nur 1 Produkt existiert, dann eben nur das eine.)
-
-                        // ---------------------------------------------
-                        // Schritt 2: Forecast-Berechnung je Produkt
-                        // ---------------------------------------------
-                        for (Product product : allProducts) {
-
-                            // 2a) Historischen 7-Tage-Durchschnitt laden
-
-
-// NEU: für denselben Kalendertag der letzten 5 Jahre
-                            double historicalAvg = warenausgangManager.calculateSameDayHistoricalAverage(
-                                    product.getProductId(),
-                                    parsedDate,
-                                    5,       // Anzahl Jahre zurück, hier fest 5
-                                    conn
-                            );
-
-                            if (historicalAvg <= 0) {
-                                historicalAvg = 5.0; // Minimaler Fallback
-                            }
-
-
-                            double weatherFactor = getWeatherFactor(product.getProductId(), avgTemp);
-                            double seasonFactor  = getSeasonFactor(product.getProductId(), dateString);
-
-                            LOGGER.log(Level.INFO, "historical avg für product: " + product.getProductName() + " = " + historicalAvg + " season factor: " + seasonFactor + " weatherfactor: " + weatherFactor);
-                            double base = (alpha * historicalAvg)
-                                    * ((beta * weatherFactor + (gamma * (1.0 + seasonFactor)))/2);
-
-                            // 2d) Falls dieses Produkt in den Top-2 und Regen > 50%, +5%
-                            if (top2ProductIds.contains(product.getProductId())) {
-                                base = base * 1.1; // +5%
-                            }
-
-                            // 2e) Feiertag/Weekend-Reduktion?
-                            if (isGermanHolidayOrWeekend(parsedDate)) {
-                                double randomReduction = 0.10 + (Math.random() * 0.05); // 10-15%
-                                base = base * (1.0 - randomReduction);
-                            }
-
-                            // 2f) Finaler Wert
-                            double forecastForDay = base;
-
-                            // In dataMap die Liste herausholen und append
-                            dataMap.get(product.getProductName()).add(forecastForDay);
-                        }
+                    LocalDate parsedDate = LocalDate.parse(dateString, inputFmt);
+                    String formattedDate = parsedDate.format(outputFmt);
+                    if (dateList.size() < timeArray.length()) {
+                        dateList.add(formattedDate);
                     }
 
-                    // ---------------------------------------------
-                    // Schritt 3: DB-Updates (dailyDemand etc.)
-                    //            + Auto-Wareneingang, reorder usw.
-                    // ---------------------------------------------
-                    // Für jedes Produkt => Summiere next 7 Tage
+                    // z.B. top-2 Produkte mit highest weatherFactor => +10% bei Regen>50 usw.
+                    List<ProductWFactor> wFactors = new ArrayList<>();
                     for (Product product : allProducts) {
-                        List<Double> fcValues = dataMap.get(product.getProductName());
-                        if (fcValues.isEmpty()) continue;
+                        double wf = getWeatherFactor(product.getProductId(), avgTemp);
+                        wFactors.add(new ProductWFactor(product, wf));
+                    }
+                    wFactors.sort((a,b) -> Double.compare(b.weatherFactor(), a.weatherFactor()));
+                    Set<Integer> top2ProductIds = new HashSet<>();
+                    if (precipProb > 50.0 && wFactors.size() >= 2) {
+                        top2ProductIds.add(wFactors.get(0).product().getProductId());
+                        top2ProductIds.add(wFactors.get(1).product().getProductId());
+                    }
 
-                        // next 7 Tage
-                        double sum7 = 0.0;
-                        int limit7 = Math.min(7, fcValues.size());
-                        for (int i = 0; i < limit7; i++) {
-                            sum7 += fcValues.get(i);
+                    // Forecast-Berechnung pro Produkt
+                    for (Product product : allProducts) {
+                        // Historischer Tagesdurchschnitt ...
+                        double historicalAvg = warenausgangManager.calculateSameDayHistoricalAverage(
+                                product.getProductId(), parsedDate, 5, conn
+                        );
+                        if (historicalAvg <= 0) {
+                            historicalAvg = 5.0;
                         }
-                        int newDailyDemand = (int)Math.round(sum7 / limit7);
 
-                        // next 3 Tage
-                        double sum3 = 0.0;
-                        int limit3 = Math.min(3, fcValues.size());
-                        for (int i = 0; i < limit3; i++) {
-                            sum3 += fcValues.get(i);
+                        double weatherFactor = getWeatherFactor(product.getProductId(), avgTemp);
+                        double seasonFactor  = getSeasonFactor(product.getProductId(), dateString);
+
+                        double base = (alpha * historicalAvg)
+                                * ((beta * weatherFactor + (gamma * (1.0 + seasonFactor))) / 2.0);
+
+                        // Falls in top2 & Regen>50 => z.B. +10%
+                        if (top2ProductIds.contains(product.getProductId())) {
+                            base *= 1.1;
                         }
-                        int newReorderPoint = (int)Math.round(sum3);
-                        int reorderQty      = (int)Math.round(sum7); // Bsp: 7-Tage-Summe
-
-                        productManager.updateProductForecastValues(product,
-                                newDailyDemand,
-                                newReorderPoint,
-                                reorderQty);
-
+                        // Feiertags/Wochenend-Reduktion
+                        if (isGermanHolidayOrWeekend(parsedDate)) {
+                            double reduction = 0.10 + (Math.random() * 0.05);
+                            base *= (1.0 - reduction);
+                        }
+                        double forecastForDay = base;
+                        dataMap.get(product.getProductName()).add(forecastForDay);
                     }
                 }
 
-                // 7) Antwort-Objekt aufbauen
-                // { alphaUsed, betaUsed, gammaUsed, dates, data: { 'Produkt1': [...], 'Produkt2': [...], ...} }
+                // 6) EOQ für jedes Produkt berechnen und DB updaten
+                // 6a) costPerItem holen
+                double costPerItem = getCostPerItem();
+                // 6b) Bestellkosten S = 25€
+                double orderCost = 25.0;
+
+                // Zeitfenster (Vorjahr) für Jahresbedarf
+                LocalDate lastYearStart = LocalDate.now().minusYears(1).withDayOfYear(1);
+                LocalDate lastYearEnd   = LocalDate.now().minusYears(1)
+                        .withDayOfYear(lastYearStart.lengthOfYear());
+
+                for (Product product : allProducts) {
+                    List<Double> fcValues = dataMap.get(product.getProductName());
+                    if (fcValues == null || fcValues.isEmpty()) {
+                        continue;
+                    }
+                    // Nächsten 7 Tage für dailyDemand
+                    double sum7 = 0.0;
+                    int limit7 = Math.min(7, fcValues.size());
+                    for (int i=0; i<limit7; i++) {
+                        sum7 += fcValues.get(i);
+                    }
+                    int newDailyDemand = (int) Math.round(sum7 / limit7);
+
+                    // Nächsten 3 Tage -> reorderPoint (Beispiel)
+                    double sum3 = 0.0;
+                    int limit3 = Math.min(3, fcValues.size());
+                    for (int i=0; i<limit3; i++) {
+                        sum3 += fcValues.get(i);
+                    }
+                    int newReorderPoint = (int) Math.round(sum3);
+
+                    // Jahresbedarf D
+                    double annualDemand = warenausgangManager.calculateDemandInPeriod(
+                            product.getProductId(),
+                            lastYearStart, lastYearEnd,
+                            conn
+                    );
+                    if (annualDemand < 1) {
+                        annualDemand = 50.0; // Fallback
+                    }
+
+                    // EOQ = sqrt( (2 * S * D) / H )
+                    double eoq = Math.sqrt( (2.0 * orderCost * annualDemand) / costPerItem );
+                    int newReorderQuantity = (int)Math.round(eoq);
+
+                    // in DB updaten
+                    productManager.updateProductForecastValues(
+                            product,
+                            newDailyDemand,
+                            newReorderPoint,
+                            newReorderQuantity
+                    );
+                }
+
+                // 7) Ergebnis für das Frontend
                 Map<String, Object> result = new HashMap<>();
                 result.put("alphaUsed", alpha);
-                result.put("betaUsed", beta);
+                result.put("betaUsed",  beta);
                 result.put("gammaUsed", gamma);
                 result.put("dates", dateList);
                 result.put("data", dataMap);
@@ -800,11 +771,12 @@
                 return ResponseEntity.ok(result);
 
             } catch (Exception e) {
-                LOGGER.log(Level.SEVERE, "Fehler im /forecast Endpoint: " + e.getMessage(), e);
+                LOGGER.log(Level.SEVERE, "Fehler bei /forecast: " + e.getMessage(), e);
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                         .body("Fehler bei /forecast: " + e.getMessage());
             }
         }
+
 
         // Hilfsrecord für Product + weatherFactor
         private record ProductWFactor(Product product, double weatherFactor) {}
@@ -1286,6 +1258,73 @@
             return 0;
         }
 
+
+        /**
+         * Berechnet die Lagerkosten pro Stück (costPerItem), basierend auf:
+         *  - aktueller Temperatur (Open-Meteo)
+         *  - Strompreis (energy-charts)
+         *  - Gesamtmenge im Lager (SUM(products.quantity))
+         *  - pBasis, kP, grundkosten (hier beispielhaft festgelegt)
+         */
+        private double getCostPerItem() throws Exception {
+            // 1) Temperatur aus Open-Meteo holen
+            String weatherUrl = "https://api.open-meteo.com/v1/forecast"
+                    + "?latitude=49.3536"
+                    + "&longitude=9.1511"
+                    + "&daily=temperature_2m_max,temperature_2m_min"
+                    + "&forecast_days=1"
+                    + "&timezone=Europe/Berlin";
+
+            String weatherJson = fetchWeatherData(weatherUrl);
+            org.json.JSONObject weatherObj = new org.json.JSONObject(weatherJson);
+            org.json.JSONObject daily = weatherObj.getJSONObject("daily");
+            double tmax = daily.getJSONArray("temperature_2m_max").optDouble(0, 0.0);
+            double tmin = daily.getJSONArray("temperature_2m_min").optDouble(0, 0.0);
+            double currentTemperature = (tmax + tmin) / 2.0;
+
+            // 2) Strompreis (EUR/MWh) für die nächsten 24h via energy-charts
+            long nowUnix = System.currentTimeMillis() / 1000L;
+            long oneDayLater = nowUnix + 24L * 3600L;
+            String priceUrl = String.format(
+                    "https://api.energy-charts.info/price?bzn=DE-LU&start=%d&end=%d",
+                    nowUnix, oneDayLater
+            );
+            String priceJson = fetchElectricityPriceData(priceUrl);
+            org.json.JSONObject priceObj = new org.json.JSONObject(priceJson);
+            org.json.JSONArray priceArray = priceObj.getJSONArray("price");
+            double sumPrice = 0.0;
+            for (int i = 0; i < priceArray.length(); i++) {
+                sumPrice += priceArray.getDouble(i);
+            }
+            double avgPriceMWh = (priceArray.length() > 0) ? (sumPrice / priceArray.length()) : 0.0;
+            // Umrechnung in EUR/kWh
+            double avgPriceKWh = avgPriceMWh / 1000.0;
+
+            // 3) Gesamtmenge im Lager
+            int totalQuantity = getTotalWarehouseQuantity(); // SELECT SUM(quantity) FROM products
+
+            // 4) pBasis, kP, grundkosten => Stromverbrauch P
+            double pBasis = 1000.0;
+            double kP = 7000.0;
+            double grundkosten = 1000.0;
+            double P;
+            if (currentTemperature > 0.0) {
+                P = pBasis + kP * (1.0 / currentTemperature);
+            } else {
+                P = pBasis + kP * Math.abs(currentTemperature);
+            }
+
+            double stromkosten = P * avgPriceKWh;
+            double betriebskosten = stromkosten + grundkosten;
+
+            // 5) costPerItem
+            if (totalQuantity > 0) {
+                return betriebskosten / totalQuantity;
+            } else {
+                // Fallback, falls totalQuantity=0
+                return betriebskosten;
+            }
+        }
 
 
     }

@@ -37,4 +37,6 @@ public interface WarenausgangManager {
             int years,
             Connection connection
     ) throws SQLException;
+
+    double calculateDemandInPeriod(int productId, LocalDate from, LocalDate to, Connection conn) throws SQLException;
 }
