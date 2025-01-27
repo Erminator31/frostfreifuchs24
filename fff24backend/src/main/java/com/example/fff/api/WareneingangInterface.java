@@ -10,4 +10,8 @@ public interface WareneingangInterface {
     String getWareneingangDate();
 
     List<WareneingangItem> getItems();
+
+    String getWareneingangMode();
+
+    void setWareneingangMode(String wareneingangMode);
 }

@@ -12,6 +12,9 @@ public interface WareneingangManager {
     void createWareneingangTable() throws Exception;
     void createWareneingangItemTable() throws Exception;
     Wareneingang createWareneingang(List<WareneingangItem> items) throws Exception;
+
+   Wareneingang createWareneingang(List<WareneingangItem> items, Timestamp wareneingangDate, String mode) throws Exception;
+
     Wareneingang createWareneingang(List<WareneingangItem> items, Timestamp wareneingangDate) throws Exception;
     Wareneingang getWareneingang(int wareneingangId) throws Exception;
     List<Wareneingang> getAllWareneingaenge() throws Exception;

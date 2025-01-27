@@ -435,7 +435,7 @@
                             // Wareneingang mit demselben Timestamp
                             wareneingangManager.createWareneingang(
                                     Collections.singletonList(wareneingangItem),
-                                    timestamp
+                                    timestamp,"automatic"
                             );
                         }
                     }
@@ -569,27 +569,31 @@
         }
 
         @PostMapping("/wareneingang")
-        public ResponseEntity<?> createWareneingang(@RequestBody Wareneingang wareneingangRequest,
-                                                    @RequestParam(value = "wareneingangDate", required = false) String wareneingangDateStr) {
-            LOGGER.log(Level.INFO, "Creating wareneingang.");
+        public ResponseEntity<?> createWareneingang(
+                @RequestBody Wareneingang wareneingangRequest,
+                @RequestParam(value = "wareneingangDate", required = false) String wareneingangDateStr) {
+
+            LOGGER.log(Level.INFO, "Creating Wareneingang (manual).");
             try {
                 Timestamp wareneingangDate = null;
                 if (wareneingangDateStr != null && !wareneingangDateStr.trim().isEmpty()) {
                     wareneingangDate = Timestamp.valueOf(wareneingangDateStr);
                 }
 
-                Wareneingang createdWareneingang;
+                Wareneingang created;
+                // This call will ALWAYS be a "manual" Wareneingang
                 if (wareneingangDate == null) {
-                    createdWareneingang = wareneingangManager.createWareneingang(wareneingangRequest.getItems());
+                    created = wareneingangManager.createWareneingang(wareneingangRequest.getItems());
                 } else {
-                    createdWareneingang = wareneingangManager.createWareneingang(wareneingangRequest.getItems(), wareneingangDate);
+                    created = wareneingangManager.createWareneingang(wareneingangRequest.getItems(), wareneingangDate);
                 }
 
-                return ResponseEntity.ok(createdWareneingang);
+                return ResponseEntity.ok(created);
             } catch (Exception e) {
                 return ResponseEntity.badRequest().body("Could not create wareneingang: " + e.getMessage());
             }
         }
+
 
         @GetMapping("/forecast")
         public ResponseEntity<?> getForecast(
