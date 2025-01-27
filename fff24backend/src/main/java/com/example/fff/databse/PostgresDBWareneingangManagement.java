@@ -44,7 +44,7 @@ public class PostgresDBWareneingangManagement implements WareneingangManager {
     public void createWareneingangTable() throws Exception {
         try (Connection conn = basicDataSource.getConnection();
              Statement stmt = conn.createStatement()) {
-            String sql = "ALTER TABLE wareneingaenge (wareneingangid SERIAL PRIMARY KEY,wareneingangdate TIMESTAMP NOT NULL DEFAULT NOW());";
+            String sql = "ALTER TABLE wareneingaenge ADD COLUMN wareneingangmode VARCHAR(50) NOT NULL DEFAULT 'manual';";
 //
 //            String sql = "CREATE TABLE IF NOT EXISTS wareneingaenge (" +
 //                    "wareneingangid SERIAL PRIMARY KEY, " +
