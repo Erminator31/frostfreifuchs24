@@ -173,7 +173,7 @@
                     connection = basicDataSource.getConnection();
                     connection.setAutoCommit(false);
 
-                    // Aktuelle Gesamtmenge im Lager prüfen (Maximal 8000)
+                    // Aktuelle Gesamtmenge im Lager prüfen (Maximal 4000)
                     String sumSQL = "SELECT COALESCE(SUM(quantity), 0) AS total_quantity FROM products";
                     sumStmt = connection.prepareStatement(sumSQL);
                     rs = sumStmt.executeQuery();
@@ -184,9 +184,9 @@
                     rs.close();
                     sumStmt.close();
 
-                    if (currentTotalQuantity + quantity > 8000) {
+                    if (currentTotalQuantity + quantity > 4000) {
                         connection.rollback();
-                        throw new Exception("Cannot add product. Adding " + quantity + " units would exceed the total warehouse capacity of 8000.");
+                        throw new Exception("Cannot add product. Adding " + quantity + " units would exceed the total warehouse capacity of 4000.");
                     }
 
                     // Prüfen, ob das Produkt bereits existiert
