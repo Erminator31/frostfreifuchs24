@@ -1116,6 +1116,15 @@
             }
         }
 
+        /**
+         * Deletes a Warenausgang entry based on the provided ID.
+         *
+         * @param warenausgangId The ID of the Warenausgang entry to be deleted.
+         * @return ResponseEntity<?> ResponseEntity containing the deletion status:
+         *                  - If the Warenausgang was deleted successfully, returns a success message.
+         *                  - If the Warenausgang was not found, returns a NOT_FOUND status with an error message.
+         *                  - If an error occurs during deletion, returns an INTERNAL_SERVER_ERROR status with an error message.
+         */
         @DeleteMapping("/warenausgang/delete/{id}")
         public ResponseEntity<?> deleteWarenausgang(@PathVariable("id") int warenausgangId) {
             Logger.getLogger("MappingController").log(Level.INFO, "Deleting warenausgang with ID " + warenausgangId);
@@ -1135,6 +1144,23 @@
             }
         }
 
+        /**
+         * Retrieves the warehouse costs based on the provided parameters and current environmental data.
+         *
+         * @param pBasis The base price value (default: 1000).
+         * @param kP The multiplier for temperature-dependent costs (default: 7000).
+         * @param grundkosten The base costs for operations (default: 1000).
+         * @return ResponseEntity containing JSON data with the following fields:
+         *         - temperature: The current average temperature in Celsius.
+         *         - electricityPriceEURperMWh: The average electricity price in EUR per MWh.
+         *         - electricityPriceEURperkWh: The average electricity price in EUR per kWh.
+         *         - totalQuantity: Total quantity in the warehouse.
+         *         - stromverbrauchKWh: Estimated power consumption in kWh.
+         *         - grundkosten: Provided base costs for operations.
+         *         - stromkosten: Total electricity costs.
+         *         - betriebskosten: Total operational costs including electricity and base costs.
+         *         - costPerItem: Optional cost per item based on totalQuantity, calculated only if totalQuantity > 0.
+         */
         @GetMapping("/lagerkosten")
         public ResponseEntity<?> getLagerkosten(
                 @RequestParam(value = "pBasis", defaultValue = "1000") double pBasis,

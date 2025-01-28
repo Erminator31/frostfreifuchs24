@@ -186,7 +186,7 @@ public class PostgresDBWarenausgangManagement implements WarenausgangManager {
             if (!reorderItems.isEmpty()) {
                 LOGGER.log(Level.INFO, "Erstelle automatischen Wareneingang für {0} Produkte.", reorderItems.size());
                 // Einen separaten Wareneingang außerhalb der ursprünglichen Transaktion erstellen
-                wareneingangManager.createWareneingang(reorderItems, referenceDate);
+                wareneingangManager.createWareneingang(reorderItems, referenceDate,"automatic");
             }
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Fehler bei der automatischen Nachbestellung: " + e.getMessage(), e);

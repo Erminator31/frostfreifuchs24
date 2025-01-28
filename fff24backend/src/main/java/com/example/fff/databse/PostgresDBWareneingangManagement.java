@@ -120,7 +120,7 @@ public class PostgresDBWareneingangManagement implements WareneingangManager {
             }
             if (adjustedItems.isEmpty()) {
                 connection.rollback();
-                throw new Exception("Keine Kapazität mehr für Wareneingänge (Lager ist voll: 20.000).");
+                throw new Exception("Keine Kapazität mehr für Wareneingänge (Lager ist voll: 4.000).");
             }
 
             // 3) Insert the wareneingang row (with wareneingangmode)
