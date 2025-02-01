@@ -386,25 +386,33 @@
                     p1 = 0.6; p2 = 0.05; p3 = 0.35;
                 } else if (m >= 2 && m <= 5) {
                     // Frühling
-                    p1 = 0.3; p2 = 0.65; p3 = 0.05;
+                    p1 = 0.35; p2 = 0.55; p3 = 0.1;
                 } else if (m >= 6 && m <= 8) {
                     // Sommer
                     p1 = 0.1; p2 = 0.85; p3 = 0.05;
                 } else {
                     // Herbst (9, 10, 11)
-                    p1 = 0.45; p2 = 0.45; p3 = 0.1;
+                    p1 = 0.35; p2 = 0.55; p3 = 0.1;
                 }
 
                 // Tägliche Anzahl Warenausgänge: 1..8
-                int warenausgaengeHeute = ThreadLocalRandom.current().nextInt(1, 9);
+                int warenausgaengeHeute = ThreadLocalRandom.current().nextInt(1, 6);
 
                 for (int i = 0; i < warenausgaengeHeute; i++) {
                     // Hier wird entschieden, wie viele unterschiedliche Produkte in diesem Warenausgang sind: 1..3
                     int itemCount = ThreadLocalRandom.current().nextInt(1, 4);
+                    Set<Integer> addedProductIds = new HashSet<>(); // Track added productIds
 
                     List<WarenausgangItem> items = new ArrayList<>();
                     for (int j = 0; j < itemCount; j++) {
-                        items.add(generateWarenausgangItemWithSeason(p1, p2, p3));
+                        WarenausgangItem newItem = generateWarenausgangItemWithSeason(p1, p2, p3);
+                        if (!addedProductIds.contains(newItem.getProductId())) {
+                            items.add(newItem);
+                            addedProductIds.add(newItem.getProductId());
+                        } else {
+                            // Optionally, handle duplicates if needed (e.g., log or adjust quantity)
+                            LOGGER.log(Level.WARNING, "Duplicate productId " + newItem.getProductId() + " skipped.");
+                        }
                     }
 
                     // Zufällige Uhrzeit am aktuellen Tag (z.B. 8–17 Uhr)
@@ -464,6 +472,10 @@
             }
 
             int quantity = ThreadLocalRandom.current().nextInt(1, 25);
+
+            if(quantity<=0){
+                quantity=1;
+            }
 
             return new WarenausgangItem(productId, quantity);
         }
