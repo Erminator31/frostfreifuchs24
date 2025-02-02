@@ -47,6 +47,7 @@ public class PostgresDBWareneingangManagement implements WareneingangManager {
             String sql = "CREATE TABLE IF NOT EXISTS wareneingaenge (" +
                     "wareneingangid SERIAL PRIMARY KEY, " +
                     "wareneingangdate TIMESTAMP NOT NULL DEFAULT NOW()" +
+                    "wareneingangmode varchar DEFAULT manual" +
                   ");";
             stmt.execute(sql);
         }

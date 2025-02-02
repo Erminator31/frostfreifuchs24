@@ -47,7 +47,9 @@ public class DailyWarenausgangScheduler {
                 // Berechne ±15% Variation
                 double variationFactor = 1 + (ThreadLocalRandom.current().nextDouble(-0.15, 0.15));
                 int targetTotalQuantity = (int) Math.round(dailyDemand * variationFactor+1);
-
+if(targetTotalQuantity<=0){
+    targetTotalQuantity=1;
+}
                 // Anzahl der Warenausgänge, die wir simulieren möchten (zum Beispiel 5)
                 int numberOfAusgaenge = random.nextInt(3,5);
                 // Verteile die Gesamtmenge zufällig auf die einzelnen Warenausgänge
@@ -95,9 +97,7 @@ public class DailyWarenausgangScheduler {
             // Verteile zufällig einen Teil der verbleibenden Menge
             int qty = random.nextInt(remaining + 1);
 
-            if(qty<=0){
-                qty=1;
-            }
+
             quantities.add(qty);
             remaining -= qty;
         }

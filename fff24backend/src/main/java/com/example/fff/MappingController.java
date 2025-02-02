@@ -348,7 +348,10 @@
 
                 LocalDate startOfMonth = LocalDate.of(year, month, 1);
                 LocalDate endOfMonth   = startOfMonth.withDayOfMonth(startOfMonth.lengthOfMonth());
-
+                if (year == 2025 && month == 2) {
+                    startOfMonth = LocalDate.of(2025, 2, 1);
+                    endOfMonth   = LocalDate.of(2025, 2, 2);
+                }
                 // Generieren der Warenausgänge (1–8 pro Tag)
                 generateWarenausgaengeForDateRange(startOfMonth, endOfMonth);
 
@@ -499,13 +502,13 @@
             boolean has3 = existing.stream().anyMatch(p -> p.getProductId() == 3);
 
             if (!has1) {
-                productManager.addProduct("Klaus Winter", "With antifreeze", 1000);
+                productManager.addProduct("Klaus Winter", "With Antifreeze", 1000);
             }
             if (!has2) {
-                productManager.addProduct("Klaus Summer", "Without antifreeze", 1000);
+                productManager.addProduct("Klaus Summer", "Without Antifreeze", 1000);
             }
             if (!has3) {
-                productManager.addProduct("Klaus Xtreme", "With antifreeze", 1000);
+                productManager.addProduct("Klaus Xtreme", "With Antifreeze", 1000);
             }
         }
 
