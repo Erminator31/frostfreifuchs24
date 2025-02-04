@@ -89,22 +89,38 @@ if(targetTotalQuantity<=0){
     /**
      * Hilfsmethode zur zufälligen Verteilung einer Gesamtmenge auf eine bestimmte Anzahl an Teilen.
      */
+    /**
+     * Verteilt eine Gesamtmenge zufällig auf eine bestimmte Anzahl von Teilen,
+     * wobei sichergestellt wird, dass jeder Teil mindestens 1 beträgt.
+     *
+     * Falls total kleiner als parts ist, wird total auf parts gesetzt.
+     */
     private List<Integer> distributeQuantityRandomly(int total, int parts) {
-        List<Integer> quantities = new ArrayList<>();
-        int remaining = total;
+        // Damit jeder Teil mindestens 1 ist, muss total mindestens parts betragen.
+        if (total < parts) {
+            total = parts;
+        }
+
+        // Erzeuge (parts - 1) zufällige "Schnittstellen" im Intervall [1, total-1]
+        List<Integer> cuts = new ArrayList<>();
         Random random = new Random();
         for (int i = 0; i < parts - 1; i++) {
-            // Verteile zufällig einen Teil der verbleibenden Menge
-            int qty = random.nextInt(remaining + 1);
-
-
-            quantities.add(qty);
-            remaining -= qty;
+            int cut = random.nextInt(total - 1) + 1; // Bereich: [1, total-1]
+            cuts.add(cut);
         }
-        // Der letzte Teil erhält den Rest
-        quantities.add(remaining);
-        // Mische die Liste, um zufällige Reihenfolge der Mengen zu gewährleisten
-        Collections.shuffle(quantities);
-        return quantities;
+        // Füge die Grenzen 0 und total hinzu
+        cuts.add(0);
+        cuts.add(total);
+
+        // Sortiere die Schnittstellen
+        Collections.sort(cuts);
+
+        // Berechne die Differenzen zwischen den benachbarten Zahlen
+        List<Integer> result = new ArrayList<>();
+        for (int i = 1; i < cuts.size(); i++) {
+            result.add(cuts.get(i) - cuts.get(i - 1));
+        }
+
+        return result;
     }
 }
