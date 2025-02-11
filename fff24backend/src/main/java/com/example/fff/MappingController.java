@@ -1250,6 +1250,7 @@
                 // Betriebskosten = Stromkosten + Grundkosten
                 double betriebskosten = stromkosten + grundkosten;
 
+
                 // Optional: cost per item (if totalQuantity>0)
                 double costPerItem = 0.0;
                 if (totalQuantity > 0) {
