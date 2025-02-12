@@ -4,12 +4,14 @@ import com.example.fff.api.ProductManager;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 
 /**
  * The CalculationService class provides utility methods for determining factors related to weather,
  * seasons, and costs. It integrates external services, like weather and product management, to
  * calculate operational and cost-related data for products.
  */
+@Service
 public class CalculationService {
 
     @Autowired

@@ -6,6 +6,7 @@ import com.example.fff.api.WareneingangManager;
 import com.example.fff.model.Product;
 import com.example.fff.model.WarenausgangItem;
 import com.example.fff.model.WareneingangItem;
+import org.springframework.stereotype.Service;
 
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -22,6 +23,7 @@ import java.util.logging.Logger;
  * Provides functionality for creating outgoing goods data within specific date ranges,
  * generating seasonal goods data, and ensuring that certain products exist in the system.
  */
+@Service
 public class HistoryService {
 
     ProductManager productManager;
