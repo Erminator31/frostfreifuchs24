@@ -1,5 +1,10 @@
 package com.example.fff.model;
 
+/**
+ * Represents daily statistics for a product.
+ * This class is designed to store data related to a specific day, including the date,
+ * the number of transactions, and product details.
+ */
 public class TagesStatistik {
     private String datum;
     private int anzahl;

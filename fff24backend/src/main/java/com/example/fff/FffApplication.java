@@ -5,7 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableAsync;
 
 @SpringBootApplication
-@EnableAsync  // <-- Enable async features
+@EnableAsync
 public class FffApplication {
 	public static void main(String[] args) {
 		SpringApplication.run(FffApplication.class, args);

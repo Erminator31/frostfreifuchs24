@@ -1,5 +1,9 @@
 package com.example.fff.model;
 
+/**
+ * Represents weights used in forecasting calculations, defined by three parameters: alpha, beta, and gamma.
+ * These weights typically influence smoothing factors in forecasting models such as exponential smoothing.
+ */
 public class ForecastWeights {
     private double alpha;
     private double beta;

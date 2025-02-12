@@ -8,6 +8,9 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.List;
 
+/**
+ * Interface for managing the Wareneingang (goods receipt) operations and related data handling.
+ */
 public interface WareneingangManager {
     void createWareneingangTable() throws Exception;
     void createWareneingangItemTable() throws Exception;

@@ -2,6 +2,14 @@ package com.example.fff.model;
 import java.util.List;
 import com.example.fff.api.WareneingangInterface;
 
+/**
+ * The Wareneingang class represents an inbound goods receipt process in an inventory or warehouse system.
+ * It encapsulates the details of a specific goods receipt event, including its identifier, receipt date,
+ * list of items received, and the mode of receipt.
+ *
+ * This class implements the WareneingangInterface, ensuring a standardized structure for accessing
+ * and managing the attributes of a goods receipt.
+ */
 public class Wareneingang implements WareneingangInterface {
 
 

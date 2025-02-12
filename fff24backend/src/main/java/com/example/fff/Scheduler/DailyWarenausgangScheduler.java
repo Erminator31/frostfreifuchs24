@@ -29,7 +29,27 @@ public class DailyWarenausgangScheduler {
         this.productManager = productManager;
     }
 
-    // Dieser Scheduled-Task wird einmal täglich um Mitternacht gestartet
+
+    /**
+     * Simulates daily warehouse outputs (Warenausgänge) for all products.
+     *
+     * This method is scheduled to run daily at 17:10 based on a cron expression.
+     * It retrieves all products from the database, calculates a target total quantity for each product
+     * based on its daily demand and a random variation factor, and simulates multiple warehouse outputs
+     * distributed throughout the day. Each warehouse output has a random timestamp and a randomly
+     * distributed quantity.
+     *
+     * The following steps are performed:
+     * - Retrieves the list of products from the database.
+     * - Computes a target total quantity for each product based on the product's daily demand and
+     *   a variation of ±15%.
+     * - Determines the number of simulated outputs for each product.
+     * - Distributes the total quantity across the desired number of outputs using a helper method.
+     * - Generates random timestamps within the current day for each simulated output.
+     * - Creates warehouse output entries for each simulated output and logs success or failure for each entry.
+     *
+     * Any exceptions during the process are caught and logged to ensure the method completes execution.
+     */
     @Scheduled(cron = "0 10 17 * * ?")
     public void simulateDailyWarenausgaenge() {
         try {

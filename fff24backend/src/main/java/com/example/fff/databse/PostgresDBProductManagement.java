@@ -13,10 +13,16 @@
         import java.util.logging.Level;
         import java.util.logging.Logger;
     
+        /**
+         * The PostgresDBProductManagement class provides functionality for managing products
+         * in a PostgreSQL database. It includes operations for creating tables, reading, adding,
+         * updating, and deleting products, as well as managing forecasting parameters.
+         * This class handles database connections, ensures data integrity, and supports
+         * transactional operations.
+         */
         @Service
         public class PostgresDBProductManagement implements ProductManager {
-            // Database connection details
-            // Database connection details
+
             String databaseURL = "jdbc:postgresql://c7u1tn6bvvsodf.cluster-czz5s0kz4scl.eu-west-1.rds.amazonaws.com:5432/d1t207hd56v54?sslmode=require";
             String username = "u3t73itv4ifknl";
             String password = "pc8d79bc3deea2ca2b99f04d14057aeb257bac911861af2c1c3f890ffecaa803c";
@@ -29,7 +35,6 @@
                 return basicDataSource;
             }
 
-            // Singleton pattern for the manager implementation
             private static PostgresDBProductManagement postgresDBProductManagement = null;
 
             private static final Logger LOGGER = Logger.getLogger(PostgresDBProductManagement.class.getName());
@@ -116,6 +121,13 @@
                 }
             }
 
+            /**
+             * Reads a product from the database based on the provided product ID.
+             *
+             * @param productId The unique ID of the product to be retrieved.
+             * @return The Product object representing the retrieved product, or null if no product is found with the given ID.
+             * @throws SQLException If a database access error occurs.
+             */
             @Override
             public Product readProductById(int productId) throws SQLException {
                 String sql = "SELECT productid, productname, producttype, quantity, daily_demand, reorder_point, reorder_quantity FROM products WHERE productid = ?";
@@ -141,22 +153,35 @@
                 return null;
             }
 
+            /**
+             * Adds a product to the system with predefined default values for daily demand, reorder point, and reorder quantity.
+             *
+             * @param productName The name of the product to be added.
+             * @param productType The type/category of the product to be added.
+             * @param quantity    The quantity of the product to be added.
+             * @return The added Product object with its properties set, including calculated default values.
+             * @throws Exception If there is an error during the process of adding the product.
+             */
             @Override
             public Product addProduct(String productName, String productType, int quantity) throws Exception {
                 int initialDailyDemand = 15;
                 return addProduct(productName, productType, quantity, initialDailyDemand, initialDailyDemand * 3, initialDailyDemand*14);
             }
 
+
             /**
-             * Erweiterte Methode zum Hinzufügen eines Produkts mit spezifischen Reorder-Parametern.
+             * Adds a product to the database with the provided parameters. If the product already exists,
+             * it updates the existing product's quantity and recalculates its reorder parameters.
+             * Ensures that the warehouse's total capacity of 4000 units is not exceeded.
              *
-             * @param productName  Der Name des Produkts.
-             * @param productType  Der Typ des Produkts.
-             * @param quantity     Die Menge, die hinzugefügt werden soll.
-             * @param dailyDemand  Der tägliche Bedarf.
-             * @param reorderPoint Der Reorder Point (dailyDemand * 7).
-             * @return Das erstellte oder aktualisierte Produkt.
-             * @throws Exception Wenn ein Fehler auftritt.
+             * @param productName      The name of the product to be added or updated.
+             * @param productType      The type or category of the product.
+             * @param quantity         The quantity of the product to add or update.
+             * @param dailyDemand      The daily demand of the product to be used for calculations.
+             * @param reorderPoint     The reorder point value for the product.
+             * @param reorderQuantity  The reorder quantity value for the product.
+             * @return The Product object representing the added or updated product, including its calculated or updated details.
+             * @throws Exception If an error occurs during the addition/updating process, including exceeding warehouse capacity or database access issues.
              */
             public Product addProduct(String productName, String productType, int quantity, int dailyDemand, int reorderPoint, int reorderQuantity) throws Exception {
                 final Logger createProductLogger = Logger.getLogger("CreateProductLogger");
@@ -403,6 +428,25 @@
             }
             // Ergänzen Sie die bestehende Klasse mit der updateDailyDemand Methode
 
+            /**
+             * Updates the daily demand, reorder point, and reorder quantity for all products in the database.
+             *
+             * This method retrieves all products from the database, calculates their average daily demand using
+             * the PostgresDBWarenausgangManagement instance, and updates the respective fields in the database
+             * for each product. The calculations for update values are based on fixed intervals:
+             * - Reorder Point: 7 days of daily demand
+             * - Reorder Quantity: 14 days of daily demand
+             *
+             * The method performs all updates in a batch process and ensures database transaction integrity
+             * with manual commitment and rollback in case of errors. Logging is performed at each step to
+             * provide detailed information about the process and any potential errors encountered.
+             *
+             * Throws an exception if any error occurs during the process, including database connection issues,
+             * query execution errors, or unexpected processing failures.
+             *
+             * @throws Exception if an error occurs during the update process, including database access errors
+             *                   or computational errors.
+             */
             @Override
             public void updateDailyDemand() throws Exception {
                 final Logger updateDemandLogger = Logger.getLogger("UpdateDemandLogger");
@@ -468,6 +512,16 @@
                 }
             }
 
+            /**
+             * Updates the forecast values of a product in the database with new values for daily demand,
+             * reorder point, and reorder quantity.
+             *
+             * @param product The Product object representing the product to be updated. The product must exist in the database.
+             * @param newDailyDemand The new daily demand value to be set for the product.
+             * @param newReorderPoint The new reorder point value to be set for the product.
+             * @param newReorderQuantity The new reorder quantity value to be set for the product.
+             * @throws SQLException If a database access error occurs while updating the product.
+             */
             @Override
             public void updateProductForecastValues(Product product,
                                                     int newDailyDemand,
@@ -498,6 +552,18 @@
                 }
             }
 
+            /**
+             * Retrieves the forecast weights (alpha, beta, gamma) used for the system's forecasting
+             * from the database. If the weights are not found, returns default weights.
+             *
+             * The method performs the following steps:
+             * - Executes an SQL query to fetch the forecast weights from the 'forecast_weights' table.
+             * - If a valid entry is found, the weights are retrieved and returned as a ForecastWeights object.
+             * - If no entry is found, default values of 1.0 for alpha, beta, and gamma are returned.
+             *
+             * @return A ForecastWeights object containing the retrieved or default forecast weights.
+             * @throws SQLException If a database access error occurs during the retrieval of forecast weights.
+             */
             @Override
             public ForecastWeights getForecastWeights() throws SQLException {
                 String sql = "SELECT alpha, beta, gamma FROM forecast_weights WHERE id=1";
@@ -517,6 +583,15 @@
             }
 
 
+            /**
+             * Updates the forecast weights in the database with the provided alpha, beta, and gamma values.
+             * If no record exists, a new record is created with the specified values.
+             *
+             * @param alpha The smoothing factor for the level in the forecast model.
+             * @param beta  The smoothing factor for the trend in the forecast model.
+             * @param gamma The smoothing factor for the seasonality in the forecast model.
+             * @throws SQLException If a database access error occurs during the update process.
+             */
             @Override
             public void updateForecastWeights(double alpha, double beta, double gamma) throws SQLException {
                 String sql = "UPDATE forecast_weights SET alpha=?, beta=?, gamma=? WHERE id=1";
@@ -539,6 +614,23 @@
                 }
             }
 
+            /**
+             * Creates the 'forecast_weights' table in the database if it does not already exist.
+             * The table is designed to store alpha, beta, and gamma parameters
+             * used for forecasting calculations. These parameters are initialized
+             * with default values of 1.0.
+             *
+             * The method also ensures that a default entry with `id=1` and all
+             * parameters set to their default values is inserted into the table,
+             * unless such an entry already exists.
+             *
+             * This operation involves creating the table structure and inserting
+             * a default record, handled within a database connection. If any errors
+             * occur during table creation or record insertion, a SQLException will be thrown.
+             *
+             * @throws SQLException if a database access error occurs, such as a connection failure
+             *                      or an error executing the SQL statements.
+             */
             @Override
             public void createForecastWeightsTable() throws SQLException {
                 String createTableSQL = """
@@ -565,6 +657,20 @@
             }
 
 
+            /**
+             * Partially updates the specified product in the database based on the provided fields.
+             * Only fields present in the updates map will be updated, and any missing values will remain unchanged.
+             *
+             * @param productId The ID of the product to be updated.
+             * @param updates A map containing the fields to be updated and their new values.
+             *                Accepted keys are:
+             *                - "dailyDemand": The new daily demand for the product.
+             *                - "reorderPoint": The new reorder point for the product.
+             *                - "reorderQuantity": The new reorder quantity for the product.
+             *                - "productQuantity": The new quantity of the product in stock.
+             *                - "producttype": The new type/category of the product.
+             * @throws SQLException If a database access error occurs or the update fails.
+             */
             @Override
             public void updateProductPartial(int productId, Map<String, Object> updates) throws SQLException {
                 // Erstelle dynamisch das SQL-Update-Statement basierend auf den übergebenen Feldern
@@ -615,5 +721,31 @@
                     }
                 }
             }
+
+            /**
+             * Retrieves the total quantity of all products available in the warehouse.
+             *
+             * This method executes a SQL query to calculate the sum of the "quantity" column
+             * across all rows in the "products" table. If the table is empty, the result will
+             * default to 0. The connection to the database is managed using the class's
+             * configured data source, and resources are automatically closed after use.
+             *
+             * @return The total quantity of all products in the warehouse as an integer.
+             *         Returns 0 if there are no entries in the "products" table or if an
+             *         error occurs during the query execution.
+             * @throws SQLException If an error occurs while accessing the database.
+             */
+            @Override
+            public int getTotalWarehouseQuantity() throws SQLException {
+                try (Connection conn = getDataSource().getConnection();
+                     Statement stmt = conn.createStatement();
+                     ResultSet rs = stmt.executeQuery("SELECT COALESCE(SUM(quantity), 0) AS total FROM products")) {
+                    if (rs.next()) {
+                        return rs.getInt("total");
+                    }
+                }
+                return 0;
+            }
+
         }
 

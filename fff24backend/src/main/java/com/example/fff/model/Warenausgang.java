@@ -4,6 +4,14 @@
 
             import java.util.List;
 
+            /**
+             * The Warenausgang class represents a shipping process in an inventory or warehouse system.
+             * It encapsulates the details of a specific outbound shipment, including its identifier,
+             * the date when the shipment is processed, and a list of items associated with the shipment.
+             *
+             * This class implements the WarenausgangInterface to ensure a standard structure for accessing
+             * shipment details.
+             */
             public class Warenausgang implements WarenausgangInterface {
                 private int warenausgangId;
                 private String warenausgangDate;

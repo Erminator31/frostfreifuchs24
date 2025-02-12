@@ -11,6 +11,10 @@ import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.util.List;
 
+/**
+ * Interface for managing "Warenausgang" (goods outgoing) data and associated operations.
+ * Provides methods for creating, retrieving, calculating statistics, and deleting entries related to outgoing goods.
+ */
 public interface WarenausgangManager {
     BasicDataSource getDataSource();
 

@@ -8,6 +8,10 @@ import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * The ProductManager interface defines the operations for managing products,
+ * including database table creation, fetching, updating, and forecasting-related functionalities.
+ */
 public interface ProductManager {
 
 
@@ -42,4 +46,6 @@ public interface ProductManager {
     void createForecastWeightsTable() throws SQLException;
 
     void updateProductPartial(int productId, Map<String, Object> updates) throws SQLException;
+
+    int getTotalWarehouseQuantity() throws SQLException;
 }
