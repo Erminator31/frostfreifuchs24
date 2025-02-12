@@ -3,6 +3,7 @@ package com.example.fff.Services;
 import com.example.fff.api.ProductManager;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * The CalculationService class provides utility methods for determining factors related to weather,
@@ -11,8 +12,11 @@ import org.json.JSONObject;
  */
 public class CalculationService {
 
-    WeatherService weatherService;
-    ProductManager productManager;
+    @Autowired
+    private WeatherService weatherService;
+
+    @Autowired
+    private ProductManager productManager;
 
 
     /**

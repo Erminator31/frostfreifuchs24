@@ -37,9 +37,15 @@ public class MappingController {
     ProductManager productManager = PostgresDBProductManagement.getPostgresDBProductManagement();
     WarenausgangManager warenausgangManager = PostgresDBWarenausgangManagement.getInstance();
     WareneingangManager wareneingangManager = PostgresDBWareneingangManagement.getInstance();
-    CalculationService calculationService = new CalculationService();
-    HistoryService historyService = new HistoryService();
-    WeatherService weatherService = new WeatherService();
+    @Autowired
+    private CalculationService calculationService;
+
+    @Autowired
+    private HistoryService historyService;
+
+    @Autowired
+    private WeatherService weatherService;
+
 
     private static final Logger LOGGER = Logger.getLogger(MappingController.class.getName());
 
